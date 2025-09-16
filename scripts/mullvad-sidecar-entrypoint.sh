@@ -132,11 +132,11 @@ else
     exit 1
 fi
 
-# Skip DNS configuration in restricted Kubernetes environments
-if [ -n "$KUBERNETES_SERVICE_HOST" ] && [ ! -w /etc/resolv.conf ]; then
-    echo "🔧 Kubernetes environment with read-only DNS detected"
-    echo "⚠️  Skipping DNS configuration (insufficient permissions)"
-    echo "🔄 Using default DNS - external resolution via WireGuard routing"
+# Skip DNS configuration entirely in Kubernetes environments to avoid permission issues
+if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
+    echo "🔧 Kubernetes environment detected - skipping DNS modification"
+    echo "⚠️  Using default cluster DNS configuration"
+    echo "🔄 External traffic will route through WireGuard, internal through cluster DNS"
 else
     # Fix DNS configuration for internal service resolution (non-fatal)
     echo "🔧 Configuring hybrid DNS for internal and external resolution..."
