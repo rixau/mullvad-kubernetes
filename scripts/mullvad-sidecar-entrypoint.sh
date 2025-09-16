@@ -190,6 +190,25 @@ else
     echo "🔄 VPN connection established - traffic routing may not be fully controlled"
 fi
 
+# Fix routing priority for external traffic in hostNetwork mode
+if [ -n "$KUBERNETES_SERVICE_HOST" ] && ip route show | grep -q "hostNetwork\|ens160"; then
+    echo "🔧 Fixing external traffic routing priority..."
+    
+    # Add higher priority rule to route external traffic through VPN
+    if ip rule add from all to 0.0.0.0/0 lookup 51820 priority 100 2>/dev/null; then
+        echo "✅ Added high-priority VPN routing rule"
+    else
+        echo "⚠️  Could not add VPN routing rule (insufficient permissions)"
+    fi
+    
+    # Ensure external traffic uses VPN by modifying default route priority
+    if ip route add default dev wg0 metric 50 2>/dev/null; then
+        echo "✅ Added high-priority VPN default route"
+    else
+        echo "⚠️  Could not modify default route priority"
+    fi
+fi
+
 echo "✅ VPN connection established with bypass routes for internal connectivity"
 
 # Validate VPN connection is working
@@ -201,13 +220,13 @@ fi
 
 echo "✅ VPN setup completed successfully"
 
-# Start health probe server on port 9999
+# Start health probe server on port 9999 (silent)
 echo "🩺 Starting health probe server on :9999..."
 {
     while true; do
         {
             echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
-        } | nc -l -p 9999 2>/dev/null || sleep 1
+        } | nc -l -p 9999 >/dev/null 2>&1 || sleep 1
     done
 } &
 HEALTH_PID=$!
