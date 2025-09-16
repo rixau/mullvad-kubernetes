@@ -37,6 +37,40 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 - **Validation**: Periodic external IP verification every 5 minutes
 - **Auto-Recovery**: Automatic reconnection on tunnel failure
 
+## 🛠️ Configuration Management
+
+### Deploy Multiple Mullvad Configs
+Use the provided script to deploy all WireGuard configs as Kubernetes secrets:
+
+```bash
+# Deploy all configs in conf/ directory to specified namespace
+./scripts/deploy-configs.sh burban-co-dev-pipeline
+
+# Dry run to see what would be created
+./scripts/deploy-configs.sh my-namespace --dry-run
+```
+
+This creates secrets like:
+- `mullvad-config-free-salmon` (US server)
+- `mullvad-config-mature-ibex` (Canada server)
+- `mullvad-config-smart-dove` (Brazil server)
+- `mullvad-config-mighty-bird` (Brazil server)
+
+### Use Different Configs for Different Services
+```yaml
+# Service A uses US server
+serviceA:
+  vpn:
+    config:
+      secretName: "mullvad-config-free-salmon"
+
+# Service B uses Canada server  
+serviceB:
+  vpn:
+    config:
+      secretName: "mullvad-config-mature-ibex"
+```
+
 ## 🚀 Quick Start
 
 ### 1. Get Mullvad Configuration
