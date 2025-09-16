@@ -132,26 +132,30 @@ else
     exit 1
 fi
 
-# Fix DNS configuration for internal service resolution
+# Fix DNS configuration for internal service resolution (non-fatal)
 echo "🔧 Configuring hybrid DNS for internal and external resolution..."
 
-# Try to create a custom DNS configuration that handles both internal and external
+# Attempt DNS configuration in a way that never fails the script
+set +e  # Temporarily disable exit on error
 {
     cat > /etc/resolv.conf << EOF
 # Hybrid DNS configuration for VPN + internal services
 # Original DNS for internal services (Docker/Kubernetes)
-$(grep "nameserver" /tmp/original-resolv.conf | head -1)
+$(grep "nameserver" /tmp/original-resolv.conf | head -1 2>/dev/null || echo "nameserver 8.8.8.8")
 # Mullvad DNS for external resolution
 nameserver 10.64.0.1
 # Search domains from original config
-$(grep "search" /tmp/original-resolv.conf || echo "")
+$(grep "search" /tmp/original-resolv.conf 2>/dev/null || echo "")
 EOF
-} 2>/dev/null
+} >/dev/null 2>&1
 
-if [ $? -eq 0 ]; then
+DNS_RESULT=$?
+set -e  # Re-enable exit on error
+
+if [ $DNS_RESULT -eq 0 ]; then
     echo "✅ Hybrid DNS configuration applied"
     echo "📄 DNS Configuration:"
-    cat /etc/resolv.conf
+    cat /etc/resolv.conf 2>/dev/null || echo "Could not read DNS config"
 else
     echo "⚠️  Could not modify /etc/resolv.conf (insufficient permissions)"
     echo "🔄 Using default DNS configuration - external resolution may use original DNS"
