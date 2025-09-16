@@ -135,8 +135,9 @@ fi
 # Fix DNS configuration for internal service resolution
 echo "🔧 Configuring hybrid DNS for internal and external resolution..."
 
-# Create a custom DNS configuration that handles both internal and external
-cat > /etc/resolv.conf << EOF
+# Try to create a custom DNS configuration that handles both internal and external
+{
+    cat > /etc/resolv.conf << EOF
 # Hybrid DNS configuration for VPN + internal services
 # Original DNS for internal services (Docker/Kubernetes)
 $(grep "nameserver" /tmp/original-resolv.conf | head -1)
@@ -145,9 +146,16 @@ nameserver 10.64.0.1
 # Search domains from original config
 $(grep "search" /tmp/original-resolv.conf || echo "")
 EOF
+} 2>/dev/null
 
-echo "📄 DNS Configuration:"
-cat /etc/resolv.conf
+if [ $? -eq 0 ]; then
+    echo "✅ Hybrid DNS configuration applied"
+    echo "📄 DNS Configuration:"
+    cat /etc/resolv.conf
+else
+    echo "⚠️  Could not modify /etc/resolv.conf (insufficient permissions)"
+    echo "🔄 Using default DNS configuration - external resolution may use original DNS"
+fi
 
 # Wait for WireGuard to establish connection
 echo "⏳ Waiting for WireGuard to connect..."
