@@ -58,23 +58,33 @@ echo "🔧 Pre-configuring bypass routes for internal networks..."
 if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
     # Running in Kubernetes - bypass cluster networks
     echo "🎯 Kubernetes environment detected"
-    ip route add 10.42.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true  # Pod network
-    ip route add 10.0.0.0/8 via $DEFAULT_GW dev $DEFAULT_IFACE || true    # Service network
-    ip route add 172.16.0.0/12 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Private networks
-    ip route add 192.168.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Private networks
-    echo "✅ Kubernetes cluster bypass routes configured"
+    echo "🔧 Attempting to configure bypass routes..."
+    
+    # Try to add bypass routes, but don't fail if permissions are insufficient
+    ROUTES_ADDED=0
+    if ip route add 10.42.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
+    if ip route add 10.0.0.0/8 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
+    if ip route add 172.16.0.0/12 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
+    if ip route add 192.168.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
+    
+    if [ $ROUTES_ADDED -gt 0 ]; then
+        echo "✅ Kubernetes cluster bypass routes configured ($ROUTES_ADDED/4 routes added)"
+    else
+        echo "⚠️  Could not configure bypass routes (insufficient permissions)"
+        echo "🔄 Continuing with WireGuard setup - internal connectivity may be limited"
+    fi
 else
     # Running in Docker Compose - bypass Docker networks
     echo "🐳 Docker Compose environment detected"
     # Get all current Docker networks and add bypass routes
     for network in $(ip route | grep -E "172\.(1[6-9]|2[0-9]|3[01])\." | awk '{print $1}' | sort -u); do
-        ip route add $network via $DEFAULT_GW dev $DEFAULT_IFACE || true
+        ip route add $network via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true
     done
     # Add common Docker network ranges
-    ip route add 172.17.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Default bridge
-    ip route add 172.18.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Custom networks
-    ip route add 172.19.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Custom networks
-    ip route add 172.20.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE || true # Custom networks
+    ip route add 172.17.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Default bridge
+    ip route add 172.18.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
+    ip route add 172.19.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
+    ip route add 172.20.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
     echo "✅ Docker Compose bypass routes configured"
 fi
 
@@ -89,19 +99,16 @@ echo "📄 Mullvad endpoint: $MULLVAD_ENDPOINT"
 # Set up no-leak egress policy BEFORE starting VPN
 echo "🛡️  Setting up no-leak security policy..."
 
-# Allow handshake to Mullvad peer (exception before drop policy)
-iptables -A OUTPUT -p udp --dport $MULLVAD_PORT -d $MULLVAD_IP -j ACCEPT
-
-# Allow loopback traffic
-iptables -A OUTPUT -o lo -j ACCEPT
-
-# Allow established connections
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-# Set default OUTPUT policy to DROP (no-leak protection)
-iptables -P OUTPUT DROP
-
-echo "✅ No-leak security policy active - only WireGuard and established connections allowed"
+# Try to set up no-leak security policy (gracefully handle permission errors)
+if iptables -A OUTPUT -p udp --dport $MULLVAD_PORT -d $MULLVAD_IP -j ACCEPT 2>/dev/null && \
+   iptables -A OUTPUT -o lo -j ACCEPT 2>/dev/null && \
+   iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null && \
+   iptables -P OUTPUT DROP 2>/dev/null; then
+    echo "✅ No-leak security policy active - only WireGuard and established connections allowed"
+else
+    echo "⚠️  Could not configure iptables kill-switch (insufficient permissions)"
+    echo "🔄 Continuing with WireGuard setup - VPN will work but without kill-switch protection"
+fi
 
 # Start WireGuard (handle DNS gracefully)
 echo "🔗 Starting Mullvad WireGuard connection..."
@@ -157,8 +164,12 @@ for i in {1..30}; do
 done
 
 # Allow WireGuard interface traffic (after interface is up)
-iptables -A OUTPUT -o wg0 -j ACCEPT
-echo "✅ WireGuard interface traffic allowed"
+if iptables -A OUTPUT -o wg0 -j ACCEPT 2>/dev/null; then
+    echo "✅ WireGuard interface traffic allowed"
+else
+    echo "⚠️  Could not configure WireGuard interface iptables rules (insufficient permissions)"
+    echo "🔄 VPN connection established - traffic routing may not be fully controlled"
+fi
 
 echo "✅ VPN connection established with bypass routes for internal connectivity"
 
