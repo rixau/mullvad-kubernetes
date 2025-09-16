@@ -18,6 +18,12 @@ cleanup() {
     # Bring down WireGuard
     wg-quick down wg0 2>/dev/null || true
     
+    # Restore original DNS configuration
+    if [ -f /tmp/original-resolv.conf ]; then
+        cp /tmp/original-resolv.conf /etc/resolv.conf
+        echo "✅ Original DNS configuration restored"
+    fi
+    
     # Restore original iptables OUTPUT policy
     iptables -P OUTPUT ACCEPT 2>/dev/null || true
     iptables -F OUTPUT 2>/dev/null || true
@@ -100,7 +106,11 @@ echo "✅ No-leak security policy active - only WireGuard and established connec
 # Start WireGuard (handle DNS gracefully)
 echo "🔗 Starting Mullvad WireGuard connection..."
 
-# Set environment to avoid resolvconf issues
+# Preserve original DNS settings before starting WireGuard
+echo "🔧 Preserving original DNS configuration..."
+cp /etc/resolv.conf /tmp/original-resolv.conf
+
+# Set environment to avoid resolvconf issues and prevent DNS override
 export RESOLVCONF=no
 
 # Try wg-quick, handle potential DNS errors gracefully
@@ -114,6 +124,23 @@ else
     cat /tmp/wg-output
     exit 1
 fi
+
+# Fix DNS configuration for internal service resolution
+echo "🔧 Configuring hybrid DNS for internal and external resolution..."
+
+# Create a custom DNS configuration that handles both internal and external
+cat > /etc/resolv.conf << EOF
+# Hybrid DNS configuration for VPN + internal services
+# Original DNS for internal services (Docker/Kubernetes)
+$(grep "nameserver" /tmp/original-resolv.conf | head -1)
+# Mullvad DNS for external resolution
+nameserver 10.64.0.1
+# Search domains from original config
+$(grep "search" /tmp/original-resolv.conf || echo "")
+EOF
+
+echo "📄 DNS Configuration:"
+cat /etc/resolv.conf
 
 # Wait for WireGuard to establish connection
 echo "⏳ Waiting for WireGuard to connect..."
