@@ -1,0 +1,114 @@
+# Example Helm template integration for Mullvad VPN sidecar
+# This shows how to integrate the Mullvad sidecar into your existing Helm charts
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myapp.fullname" . }}
+  labels:
+    {{- include "myapp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "myapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "myapp.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.vpn.enabled }}
+      # VPN configuration - required for sidecar
+      shareProcessNamespace: true
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
+        runAsNonRoot: false
+      {{- end }}
+      containers:
+        # Your main application container
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+          # Your app configuration here...
+          
+        {{- if .Values.vpn.enabled }}
+        # Mullvad WireGuard VPN sidecar
+        - name: mullvad-sidecar
+          image: {{ .Values.vpn.image }}
+          env:
+            {{- range .Values.vpn.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          securityContext:
+            capabilities:
+              add:
+                - "NET_ADMIN"
+                - "SYS_MODULE"
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - name: tun-device
+              mountPath: /dev/net/tun
+            - name: mullvad-config
+              mountPath: /etc/wireguard
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9999
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9999
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.vpn.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        {{- if .Values.vpn.enabled }}
+        - name: tun-device
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: mullvad-config
+          secret:
+            secretName: {{ .Values.vpn.configSecret }}
+            items:
+              - key: wg0.conf
+                path: wg0.conf
+            defaultMode: 0400
+        {{- end }}
+
+---
+# Example values.yaml configuration
+# vpn:
+#   enabled: true
+#   image: "ghcr.io/rixau/mullvad-kubernetes:latest"
+#   configSecret: "mullvad-config"
+#   env:
+#     - name: ENABLE_KILL_SWITCH
+#       value: "false"
+#     - name: ENABLE_DNS_CONFIG
+#       value: "false"
+#     - name: ENABLE_BYPASS_ROUTES
+#       value: "true"
+#     - name: ENABLE_HEALTH_PROBE
+#       value: "true"
+#   resources:
+#     requests:
+#       cpu: 100m
+#       memory: 128Mi
+#     limits:
+#       cpu: 200m
+#       memory: 256Mi

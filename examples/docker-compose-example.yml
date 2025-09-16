@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Your main application
+  app:
+    image: your-app:latest
+    # Use the VPN sidecar's network
+    network_mode: "container:vpn-sidecar"
+    depends_on:
+      vpn-sidecar:
+        condition: service_healthy
+    # Your app configuration...
+
+  # Mullvad VPN sidecar
+  vpn-sidecar:
+    image: ghcr.io/rixau/mullvad-kubernetes:latest
+    container_name: vpn-sidecar
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    privileged: true
+    environment:
+      # Configure VPN features
+      - ENABLE_KILL_SWITCH=true     # Enable for Docker (safer)
+      - ENABLE_DNS_CONFIG=true      # Enable DNS configuration
+      - ENABLE_BYPASS_ROUTES=true   # Keep for Docker networks
+      - ENABLE_HEALTH_PROBE=true    # Enable health monitoring
+    volumes:
+      # Mount your Mullvad WireGuard config
+      - ./conf/mullvad-server.conf:/etc/wireguard/wg0.conf:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Example: Another service using the same VPN
+  scraper:
+    image: your-scraper:latest
+    network_mode: "container:vpn-sidecar"
+    depends_on:
+      vpn-sidecar:
+        condition: service_healthy
+    # This service will also use the VPN connection

@@ -4,7 +4,13 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 
 ## 🔒 Security Features
 
-### No-Leak Egress Policy
+### Configurable Security (Environment Variables)
+- **`ENABLE_KILL_SWITCH=false`** (default): Disable iptables kill-switch for compatibility
+- **`ENABLE_DNS_CONFIG=false`** (default): Skip DNS modification to avoid conflicts
+- **`ENABLE_BYPASS_ROUTES=true`** (default): Keep internal network bypass routes
+- **`ENABLE_HEALTH_PROBE=true`** (default): Enable health monitoring on port 9999
+
+### No-Leak Egress Policy (When Enabled)
 - **Kill Switch**: If the VPN tunnel drops, the OUTPUT iptables policy drops all non-WireGuard traffic
 - **Zero Leak Guarantee**: No traffic can escape the VPN tunnel, even during connection failures
 - **Automatic Recovery**: VPN reconnection restores normal traffic flow

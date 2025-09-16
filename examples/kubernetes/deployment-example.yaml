@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-with-mullvad-vpn
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-with-mullvad-vpn
+  template:
+    metadata:
+      labels:
+        app: app-with-mullvad-vpn
+    spec:
+      # Required for VPN sidecar operations
+      shareProcessNamespace: true
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
+        runAsNonRoot: false
+      containers:
+        # Your main application container
+        - name: app
+          image: your-app:latest
+          ports:
+            - containerPort: 8080
+          # Your app will automatically use the VPN connection
+          
+        # Mullvad WireGuard VPN sidecar
+        - name: mullvad-sidecar
+          image: ghcr.io/rixau/mullvad-kubernetes:latest
+          env:
+            # Configure VPN features (all optional)
+            - name: ENABLE_KILL_SWITCH
+              value: "false"  # Disable for compatibility
+            - name: ENABLE_DNS_CONFIG
+              value: "false"  # Skip DNS modification
+            - name: ENABLE_BYPASS_ROUTES
+              value: "true"   # Keep internal network access
+            - name: ENABLE_HEALTH_PROBE
+              value: "true"   # Enable health monitoring
+          securityContext:
+            capabilities:
+              add:
+                - "NET_ADMIN"
+                - "SYS_MODULE"
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - name: tun-device
+              mountPath: /dev/net/tun
+            - name: mullvad-config
+              mountPath: /etc/wireguard
+              readOnly: true
+          # Health checks for Kubernetes
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9999
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9999
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        # TUN device for WireGuard
+        - name: tun-device
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        # Your Mullvad WireGuard configuration
+        - name: mullvad-config
+          secret:
+            secretName: mullvad-config
+            items:
+              - key: wg0.conf
+                path: wg0.conf
+            defaultMode: 0400
+---
+# Example secret for WireGuard config
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mullvad-config
+  namespace: default
+type: Opaque
+stringData:
+  wg0.conf: |
+    [Interface]
+    PrivateKey = YOUR_PRIVATE_KEY_HERE
+    Address = YOUR_VPN_IP/32
+    DNS = 10.43.0.10,10.64.0.1  # Hybrid DNS: cluster + Mullvad
+
+    [Peer]
+    PublicKey = MULLVAD_SERVER_PUBLIC_KEY
+    AllowedIPs = 0.0.0.0/0,::0/0
+    Endpoint = MULLVAD_SERVER_IP:51820
+    PersistentKeepalive = 25
