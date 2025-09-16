@@ -37,6 +37,18 @@ trap cleanup SIGTERM SIGINT SIGQUIT
 
 echo "🚀 Starting Mullvad WireGuard Sidecar..."
 
+# Environment variable controls (defaults for maximum compatibility)
+ENABLE_KILL_SWITCH=${ENABLE_KILL_SWITCH:-false}
+ENABLE_DNS_CONFIG=${ENABLE_DNS_CONFIG:-false}
+ENABLE_BYPASS_ROUTES=${ENABLE_BYPASS_ROUTES:-true}
+ENABLE_HEALTH_PROBE=${ENABLE_HEALTH_PROBE:-true}
+
+echo "🔧 Configuration:"
+echo "   Kill-switch: $ENABLE_KILL_SWITCH"
+echo "   DNS config: $ENABLE_DNS_CONFIG"
+echo "   Bypass routes: $ENABLE_BYPASS_ROUTES"
+echo "   Health probe: $ENABLE_HEALTH_PROBE"
+
 # Check if WireGuard config file exists
 if [ ! -f /etc/wireguard/wg0.conf ]; then
     echo "❌ ERROR: WireGuard config file not found at /etc/wireguard/wg0.conf"
@@ -51,11 +63,12 @@ DEFAULT_GW=$(ip route | grep default | awk '{print $3}')
 DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}')
 echo "🌐 Current gateway: $DEFAULT_GW via interface: $DEFAULT_IFACE"
 
-# Pre-configure bypass routes for internal networks
-echo "🔧 Pre-configuring bypass routes for internal networks..."
+# Pre-configure bypass routes for internal networks (if enabled)
+if [ "$ENABLE_BYPASS_ROUTES" = "true" ]; then
+    echo "🔧 Pre-configuring bypass routes for internal networks..."
 
-# Detect environment and configure appropriate bypass routes
-if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
+    # Detect environment and configure appropriate bypass routes
+    if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
     # Running in Kubernetes - bypass cluster networks
     echo "🎯 Kubernetes environment detected"
     echo "🔧 Attempting to configure bypass routes..."
@@ -86,6 +99,9 @@ else
     ip route add 172.19.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
     ip route add 172.20.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
     echo "✅ Docker Compose bypass routes configured"
+    fi
+else
+    echo "⚠️  Bypass routes disabled via ENABLE_BYPASS_ROUTES=false"
 fi
 
 # Extract Mullvad peer info for handshake exception
@@ -96,18 +112,23 @@ MULLVAD_PORT=$(echo $MULLVAD_ENDPOINT | cut -d':' -f2)
 echo "🔐 Using mounted Mullvad WireGuard configuration..."
 echo "📄 Mullvad endpoint: $MULLVAD_ENDPOINT"
 
-# Set up no-leak egress policy BEFORE starting VPN
-echo "🛡️  Setting up no-leak security policy..."
+# Set up no-leak egress policy BEFORE starting VPN (if enabled)
+if [ "$ENABLE_KILL_SWITCH" = "true" ]; then
+    echo "🛡️  Setting up no-leak security policy..."
 
-# Try to set up no-leak security policy (gracefully handle permission errors)
-if iptables -A OUTPUT -p udp --dport $MULLVAD_PORT -d $MULLVAD_IP -j ACCEPT 2>/dev/null && \
-   iptables -A OUTPUT -o lo -j ACCEPT 2>/dev/null && \
-   iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null && \
-   iptables -P OUTPUT DROP 2>/dev/null; then
-    echo "✅ No-leak security policy active - only WireGuard and established connections allowed"
+    # Try to set up no-leak security policy (gracefully handle permission errors)
+    if iptables -A OUTPUT -p udp --dport $MULLVAD_PORT -d $MULLVAD_IP -j ACCEPT 2>/dev/null && \
+       iptables -A OUTPUT -o lo -j ACCEPT 2>/dev/null && \
+       iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null && \
+       iptables -P OUTPUT DROP 2>/dev/null; then
+        echo "✅ No-leak security policy active - only WireGuard and established connections allowed"
+    else
+        echo "⚠️  Could not configure iptables kill-switch (insufficient permissions)"
+        echo "🔄 Continuing with WireGuard setup - VPN will work but without kill-switch protection"
+    fi
 else
-    echo "⚠️  Could not configure iptables kill-switch (insufficient permissions)"
-    echo "🔄 Continuing with WireGuard setup - VPN will work but without kill-switch protection"
+    echo "⚠️  Kill-switch disabled via ENABLE_KILL_SWITCH=false"
+    echo "🔄 VPN will work without traffic leak protection"
 fi
 
 # Start WireGuard (handle DNS gracefully)
@@ -132,12 +153,14 @@ else
     exit 1
 fi
 
-# Skip DNS configuration entirely in Kubernetes environments to avoid permission issues
-if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
-    echo "🔧 Kubernetes environment detected - skipping DNS modification"
-    echo "⚠️  Using default cluster DNS configuration"
-    echo "🔄 External traffic will route through WireGuard, internal through cluster DNS"
-else
+# DNS configuration (conditional based on environment variable)
+if [ "$ENABLE_DNS_CONFIG" = "true" ]; then
+    echo "🔧 DNS configuration enabled"
+    if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
+        echo "🔧 Kubernetes environment detected - skipping DNS modification"
+        echo "⚠️  Using default cluster DNS configuration"
+        echo "🔄 External traffic will route through WireGuard, internal through cluster DNS"
+    else
     # Fix DNS configuration for internal service resolution (non-fatal)
     echo "🔧 Configuring hybrid DNS for internal and external resolution..."
 
@@ -166,6 +189,10 @@ EOF
         echo "⚠️  Could not modify /etc/resolv.conf (insufficient permissions)"
         echo "🔄 Using default DNS configuration - external resolution may use original DNS"
     fi
+    fi
+else
+    echo "⚠️  DNS configuration disabled via ENABLE_DNS_CONFIG=false"
+    echo "🔄 Using default DNS configuration"
 fi
 
 # Wait for WireGuard to establish connection
@@ -182,12 +209,16 @@ for i in {1..30}; do
     sleep 2
 done
 
-# Allow WireGuard interface traffic (after interface is up)
-if iptables -A OUTPUT -o wg0 -j ACCEPT 2>/dev/null; then
-    echo "✅ WireGuard interface traffic allowed"
+# Allow WireGuard interface traffic (after interface is up) - only if kill-switch is enabled
+if [ "$ENABLE_KILL_SWITCH" = "true" ]; then
+    if iptables -A OUTPUT -o wg0 -j ACCEPT 2>/dev/null; then
+        echo "✅ WireGuard interface traffic allowed"
+    else
+        echo "⚠️  Could not configure WireGuard interface iptables rules (insufficient permissions)"
+        echo "🔄 VPN connection established - traffic routing may not be fully controlled"
+    fi
 else
-    echo "⚠️  Could not configure WireGuard interface iptables rules (insufficient permissions)"
-    echo "🔄 VPN connection established - traffic routing may not be fully controlled"
+    echo "⚠️  Skipping WireGuard iptables rules (kill-switch disabled)"
 fi
 
 # Fix routing priority for external traffic in hostNetwork mode
@@ -220,18 +251,21 @@ fi
 
 echo "✅ VPN setup completed successfully"
 
-# Start health probe server on port 9999 (silent)
-echo "🩺 Starting health probe server on :9999..."
-{
-    while true; do
-        {
-            echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
-        } | nc -l -p 9999 >/dev/null 2>&1 || sleep 1
-    done
-} &
-HEALTH_PID=$!
-
-echo "✅ Health probe server started (PID: $HEALTH_PID)"
+# Start health probe server on port 9999 (if enabled)
+if [ "$ENABLE_HEALTH_PROBE" = "true" ]; then
+    echo "🩺 Starting health probe server on :9999..."
+    {
+        while true; do
+            {
+                echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
+            } | nc -l -p 9999 >/dev/null 2>&1 || sleep 1
+        done
+    } &
+    HEALTH_PID=$!
+    echo "✅ Health probe server started (PID: $HEALTH_PID)"
+else
+    echo "⚠️  Health probe disabled via ENABLE_HEALTH_PROBE=false"
+fi
 
 # Keep the VPN connection alive and monitor it
 echo "👁️  Starting VPN monitoring loop..."
