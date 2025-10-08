@@ -1,4 +1,4 @@
-name: Build Mullvad Kubernetes Sidecar
+name: Build Mullvad Kubernetes Image
 
 on:
   push:

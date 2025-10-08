@@ -1,0 +1,180 @@
+services:
+  # Mullvad VPN Proxy Pool - US Server
+  mullvad-proxy-us:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: mullvad-proxy-us
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    privileged: true
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      # Enable proxy pool mode
+      - ENABLE_PROXY_MODE=true
+      - ENABLE_KILL_SWITCH=false
+      - ENABLE_DNS_CONFIG=false
+      - ENABLE_BYPASS_ROUTES=true
+      - ENABLE_HEALTH_PROBE=true
+      # Proxy configuration
+      - SOCKS5_PORT=1080
+      - HTTP_PORT=3128
+      - PROXY_AUTH=false
+      # - PROXY_USERNAME=proxy
+      # - PROXY_PASSWORD=changeme
+    volumes:
+      - ./conf/free-salmon.conf:/etc/wireguard/wg0.conf:ro
+    ports:
+      - "1080:1080"   # SOCKS5
+      - "3128:3128"   # HTTP
+      - "9990:9999"   # Health probe
+    networks:
+      - proxy-network
+
+  # Mullvad VPN Proxy Pool - Brazil Server
+  mullvad-proxy-br:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: mullvad-proxy-br
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    privileged: true
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - ENABLE_PROXY_MODE=true
+      - ENABLE_KILL_SWITCH=false
+      - ENABLE_DNS_CONFIG=false
+      - ENABLE_BYPASS_ROUTES=true
+      - ENABLE_HEALTH_PROBE=true
+      - SOCKS5_PORT=1080
+      - HTTP_PORT=3128
+      - PROXY_AUTH=false
+    volumes:
+      - ./conf/mighty-bird.conf:/etc/wireguard/wg0.conf:ro
+    ports:
+      - "1081:1080"   # SOCKS5
+      - "3129:3128"   # HTTP
+      - "9991:9999"   # Health probe
+    networks:
+      - proxy-network
+
+  # Mullvad VPN Proxy Pool - Canada Server
+  mullvad-proxy-ca:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: mullvad-proxy-ca
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    privileged: true
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - ENABLE_PROXY_MODE=true
+      - ENABLE_KILL_SWITCH=false
+      - ENABLE_DNS_CONFIG=false
+      - ENABLE_BYPASS_ROUTES=true
+      - ENABLE_HEALTH_PROBE=true
+      - SOCKS5_PORT=1080
+      - HTTP_PORT=3128
+      - PROXY_AUTH=false
+    volumes:
+      - ./conf/mature-ibex.conf:/etc/wireguard/wg0.conf:ro
+    ports:
+      - "1082:1080"   # SOCKS5
+      - "3130:3128"   # HTTP
+      - "9992:9999"   # Health probe
+    networks:
+      - proxy-network
+
+  # Test app that uses the proxy pool via SOCKS5
+  test-app-socks5:
+    image: curlimages/curl:latest
+    container_name: test-app-socks5
+    depends_on:
+      - mullvad-proxy-us
+      - mullvad-proxy-br
+      - mullvad-proxy-ca
+    networks:
+      - proxy-network
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Testing Mullvad VPN Proxy Pool with SOCKS5...'
+        echo 'Waiting for proxies to be ready...'
+        sleep 45
+        echo ''
+        echo '========================================='
+        echo 'Testing US Proxy (SOCKS5)'
+        echo '========================================='
+        IP_US=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-us:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "US Proxy IP: $$IP_US"
+        echo ''
+        echo '========================================='
+        echo 'Testing Brazil Proxy (SOCKS5)'
+        echo '========================================='
+        IP_BR=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-br:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "Brazil Proxy IP: $$IP_BR"
+        echo ''
+        echo '========================================='
+        echo 'Testing Canada Proxy (SOCKS5)'
+        echo '========================================='
+        IP_CA=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-ca:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "Canada Proxy IP: $$IP_CA"
+        echo ''
+        echo '========================================='
+        echo 'SUMMARY'
+        echo '========================================='
+        echo "US Proxy:     $$IP_US"
+        echo "Brazil Proxy: $$IP_BR"
+        echo "Canada Proxy: $$IP_CA"
+        echo ''
+        if [ "$$IP_US" != "$$IP_BR" ] && [ "$$IP_BR" != "$$IP_CA" ]; then
+          echo 'SUCCESS: All proxies are working with different IPs!'
+        else
+          echo 'WARNING: Some proxies may have the same IP'
+        fi
+        echo ''
+        echo 'Starting continuous monitoring (checking US proxy every 60s)...'
+        while true; do
+          sleep 60
+          NEW_IP=$$(curl -s --max-time 10 --proxy socks5h://mullvad-proxy-us:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+          echo "$$(date): US Proxy IP: $$NEW_IP"
+        done
+
+  # Test app that uses the proxy pool via HTTP
+  test-app-http:
+    image: curlimages/curl:latest
+    container_name: test-app-http
+    depends_on:
+      - mullvad-proxy-us
+    networks:
+      - proxy-network
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Testing Mullvad VPN Proxy Pool with HTTP proxy...'
+        sleep 45
+        while true; do
+          IP=$$(curl -s --max-time 15 --proxy http://mullvad-proxy-us:3128 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+          echo "$$(date): HTTP Proxy IP: $$IP"
+          sleep 60
+        done
+
+networks:
+  proxy-network:
+    driver: bridge

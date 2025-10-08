@@ -9,6 +9,16 @@ set -e
 cleanup() {
     echo "🧹 Cleaning up..."
     
+    # Kill proxy servers
+    if [ -n "$DANTE_PID" ]; then
+        kill $DANTE_PID 2>/dev/null || true
+        echo "✅ SOCKS5 proxy (dante) stopped"
+    fi
+    if [ -n "$TINYPROXY_PID" ]; then
+        kill $TINYPROXY_PID 2>/dev/null || true
+        echo "✅ HTTP proxy (tinyproxy) stopped"
+    fi
+    
     # Kill health probe server
     if [ -n "$HEALTH_PID" ]; then
         kill $HEALTH_PID 2>/dev/null || true
@@ -42,12 +52,14 @@ ENABLE_KILL_SWITCH=${ENABLE_KILL_SWITCH:-false}
 ENABLE_DNS_CONFIG=${ENABLE_DNS_CONFIG:-false}
 ENABLE_BYPASS_ROUTES=${ENABLE_BYPASS_ROUTES:-true}
 ENABLE_HEALTH_PROBE=${ENABLE_HEALTH_PROBE:-true}
+ENABLE_PROXY_MODE=${ENABLE_PROXY_MODE:-false}
 
 echo "🔧 Configuration:"
 echo "   Kill-switch: $ENABLE_KILL_SWITCH"
 echo "   DNS config: $ENABLE_DNS_CONFIG"
 echo "   Bypass routes: $ENABLE_BYPASS_ROUTES"
 echo "   Health probe: $ENABLE_HEALTH_PROBE"
+echo "   Proxy mode: $ENABLE_PROXY_MODE"
 
 # Check if WireGuard config file exists
 if [ ! -f /etc/wireguard/wg0.conf ]; then
@@ -250,6 +262,50 @@ if ! /usr/local/bin/validate-wireguard.sh; then
 fi
 
 echo "✅ VPN setup completed successfully"
+
+# Start proxy servers if proxy mode is enabled
+if [ "$ENABLE_PROXY_MODE" = "true" ]; then
+    echo "🌐 Starting proxy servers (proxy pool mode)..."
+    
+    # Configure proxies
+    /usr/local/bin/configure-proxy.sh
+    
+    # Start dante SOCKS5 server
+    echo "🚀 Starting dante SOCKS5 server..."
+    danted -f /etc/danted.conf &
+    DANTE_PID=$!
+    
+    # Start tinyproxy HTTP server (optional - SOCKS5 is primary)
+    echo "🚀 Starting tinyproxy HTTP server..."
+    tinyproxy -c /etc/tinyproxy/tinyproxy.conf 2>/dev/null &
+    TINYPROXY_PID=$!
+    
+    # Wait for proxies to start
+    sleep 3
+    
+    # Verify SOCKS5 proxy is running (required)
+    if ps -p $DANTE_PID > /dev/null; then
+        echo "✅ SOCKS5 proxy (dante) started (PID: $DANTE_PID)"
+        echo "   Listening on: 0.0.0.0:${SOCKS5_PORT:-1080}"
+    else
+        echo "❌ ERROR: SOCKS5 proxy (dante) failed to start"
+        echo "❌ CRITICAL: Proxy pool mode requires SOCKS5 proxy"
+        exit 1
+    fi
+    
+    # Check HTTP proxy (optional - warn if failed)
+    if ps -p $TINYPROXY_PID > /dev/null; then
+        echo "✅ HTTP proxy (tinyproxy) started (PID: $TINYPROXY_PID)"
+        echo "   Listening on: 0.0.0.0:${HTTP_PORT:-3128}"
+    else
+        echo "⚠️  WARNING: HTTP proxy (tinyproxy) failed to start - SOCKS5 proxy still available"
+        TINYPROXY_PID=""
+    fi
+    
+    echo "✅ Proxy pool mode active (SOCKS5 ready)"
+else
+    echo "⚠️  Proxy mode disabled (sidecar mode)"
+fi
 
 # Start health probe server on port 9999 (if enabled)
 if [ "$ENABLE_HEALTH_PROBE" = "true" ]; then
