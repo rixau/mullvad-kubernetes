@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     kmod \
     openresolv \
-    dante-server \
+    danted \
     tinyproxy \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
