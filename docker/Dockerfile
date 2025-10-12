@@ -4,7 +4,11 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install required packages for WireGuard and Proxy
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    add-apt-repository universe && \
+    apt-get update && \
+    apt-get install -y \
     wireguard-tools \
     curl \
     wget \
@@ -17,7 +21,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     kmod \
     openresolv \
-    danted \
+    dante-server \
     tinyproxy \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
