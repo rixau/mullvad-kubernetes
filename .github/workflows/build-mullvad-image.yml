@@ -8,7 +8,9 @@ on:
       - 'scripts/validate-wireguard.sh'
       - 'scripts/mullvad-sidecar-entrypoint.sh'
       - 'scripts/configure-proxy.sh'
-      - '.github/workflows/build-mullvad-sidecar.yml'
+      - '.github/workflows/build-mullvad-image.yml'
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v0.5.0)
   workflow_dispatch:  # Allow manual triggering
 
 env:
@@ -41,6 +43,8 @@ jobs:
         tags: |
           type=ref,event=branch
           type=sha,prefix={{branch}}-
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
