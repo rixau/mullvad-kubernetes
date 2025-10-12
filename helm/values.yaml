@@ -1,0 +1,94 @@
+# Default values for mullvad-proxy-pool
+# This Helm chart deploys multiple Mullvad VPN proxy servers
+
+# Container image configuration
+image:
+  repository: ghcr.io/rixau/mullvad-kubernetes
+  pullPolicy: IfNotPresent
+  tag: "main-cd77b94"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service configuration for load balancing across proxy pools
+service:
+  type: ClusterIP
+  ports:
+    socks5: 1080
+    http: 3128
+    health: 9999
+
+# Proxy pool configuration
+# Each proxy instance will be deployed as a separate pod
+proxies:
+  # Golden Crab VPN server
+  golden-crab:
+    enabled: true
+    replicaCount: 1
+    config:
+      # Secret containing wg0.conf
+      secretName: "mullvad-golden-crab"
+      configKey: "wg0.conf"
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    env:
+      - name: ENABLE_PROXY_MODE
+        value: "true"
+      - name: SOCKS5_PORT
+        value: "1080"
+      - name: HTTP_PORT
+        value: "3128"
+      - name: PROXY_AUTH
+        value: "false"
+    
+  # Free Salmon VPN server  
+  free-salmon:
+    enabled: true
+    replicaCount: 1
+    config:
+      # Secret containing wg0.conf
+      secretName: "mullvad-free-salmon"
+      configKey: "wg0.conf"
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    env:
+      - name: ENABLE_PROXY_MODE
+        value: "true"
+      - name: SOCKS5_PORT
+        value: "1080"
+      - name: HTTP_PORT
+        value: "3128"
+      - name: PROXY_AUTH
+        value: "false"
+
+# Pod annotations
+podAnnotations: {}
+
+# Security context for VPN containers
+securityContext:
+  capabilities:
+    add:
+      - NET_ADMIN
+      - SYS_MODULE
+  privileged: true
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+

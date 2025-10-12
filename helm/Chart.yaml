@@ -1,0 +1,18 @@
+apiVersion: v2
+name: mullvad-proxy-pool
+description: A Helm chart for Mullvad VPN Proxy Pool with SOCKS5 and HTTP proxy support
+type: application
+version: 0.1.0
+appVersion: "main-cd77b94"
+keywords:
+  - vpn
+  - wireguard
+  - mullvad
+  - proxy
+  - socks5
+home: https://github.com/rixau/mullvad-kubernetes
+sources:
+  - https://github.com/rixau/mullvad-kubernetes
+maintainers:
+  - name: R2
+

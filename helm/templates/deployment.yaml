@@ -1,0 +1,101 @@
+{{- range $proxyName, $proxy := .Values.proxies }}
+{{- if $proxy.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mullvad-proxy-pool.fullname" $ }}-{{ $proxyName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "mullvad-proxy-pool.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: vpn-proxy
+    mullvad.proxy/server: {{ $proxyName }}
+spec:
+  replicas: {{ $proxy.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "mullvad-proxy-pool.name" $ }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: vpn-proxy
+      mullvad.proxy/server: {{ $proxyName }}
+  template:
+    metadata:
+      annotations:
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/name: {{ include "mullvad-proxy-pool.name" $ }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: vpn-proxy
+        mullvad.proxy/server: {{ $proxyName }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: mullvad-vpn-proxy
+        image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+        imagePullPolicy: {{ $.Values.image.pullPolicy }}
+        ports:
+        - name: socks5
+          containerPort: {{ $.Values.service.ports.socks5 }}
+          protocol: TCP
+        - name: http
+          containerPort: {{ $.Values.service.ports.http }}
+          protocol: TCP
+        - name: health
+          containerPort: {{ $.Values.service.ports.health }}
+          protocol: TCP
+        env:
+        {{- with $proxy.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        securityContext:
+          {{- toYaml $.Values.securityContext | nindent 10 }}
+        volumeMounts:
+        - name: wireguard-config
+          mountPath: /etc/wireguard/wg0.conf
+          subPath: {{ $proxy.config.configKey }}
+          readOnly: true
+        - name: tun-device
+          mountPath: /dev/net/tun
+        resources:
+          {{- toYaml $proxy.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: wireguard-config
+        secret:
+          secretName: {{ $proxy.config.secretName }}
+      - name: tun-device
+        hostPath:
+          path: /dev/net/tun
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}
+
