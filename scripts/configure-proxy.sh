@@ -13,6 +13,17 @@ HTTP_PORT=${HTTP_PORT:-3128}
 PROXY_AUTH=${PROXY_AUTH:-false}
 PROXY_USERNAME=${PROXY_USERNAME:-proxy}
 PROXY_PASSWORD=${PROXY_PASSWORD:-changeme}
+DEBUG_LOGGING=${DEBUG_LOGGING:-false}
+
+# Set log level based on debug mode
+if [ "$DEBUG_LOGGING" = "true" ]; then
+    DANTE_LOG_LEVEL="connect"  # Logs all connection attempts with URLs
+    DANTE_LOG_OUTPUT="stderr"   # Output to container logs
+    echo "🐛 DEBUG_LOGGING enabled - SOCKS5 requests will be logged to container output"
+else
+    DANTE_LOG_LEVEL="error"
+    DANTE_LOG_OUTPUT="/var/log/danted.log"  # Only errors to file
+fi
 
 # ========================================
 # Configure dante-server (SOCKS5)
@@ -23,7 +34,7 @@ cat > /etc/danted.conf << EOF
 # Dante SOCKS5 server configuration
 # Generated: $(date)
 
-logoutput: /var/log/danted.log
+logoutput: $DANTE_LOG_OUTPUT
 
 # Listen on all interfaces
 internal: 0.0.0.0 port = $SOCKS5_PORT
@@ -42,14 +53,14 @@ socksmethod: username
 # Client rules
 client pass {
     from: 0.0.0.0/0 to: 0.0.0.0/0
-    log: error
+    log: $DANTE_LOG_LEVEL
 }
 
 # SOCKS rules
 socks pass {
     from: 0.0.0.0/0 to: 0.0.0.0/0
     command: bind connect udpassociate
-    log: error
+    log: $DANTE_LOG_LEVEL
     socksmethod: username
 }
 EOF
@@ -61,14 +72,14 @@ socksmethod: none
 # Client rules
 client pass {
     from: 0.0.0.0/0 to: 0.0.0.0/0
-    log: error
+    log: $DANTE_LOG_LEVEL
 }
 
 # SOCKS rules
 socks pass {
     from: 0.0.0.0/0 to: 0.0.0.0/0
     command: bind connect udpassociate
-    log: error
+    log: $DANTE_LOG_LEVEL
 }
 EOF
 fi
@@ -111,5 +122,8 @@ touch /var/log/danted.log /var/log/tinyproxy/tinyproxy.log
 chown -R tinyproxy:tinyproxy /var/log/tinyproxy /run/tinyproxy 2>/dev/null || true
 
 echo "✅ Proxy configuration complete"
-echo "   SOCKS5 (dante): Port $SOCKS5_PORT, Auth: $PROXY_AUTH"
+echo "   SOCKS5 (dante): Port $SOCKS5_PORT, Auth: $PROXY_AUTH, Debug: $DEBUG_LOGGING"
 echo "   HTTP (tinyproxy): Port $HTTP_PORT, Auth: disabled (not supported)"
+if [ "$DEBUG_LOGGING" = "true" ]; then
+    echo "   📝 Debug logging: SOCKS5 requests will be logged to /var/log/danted.log"
+fi

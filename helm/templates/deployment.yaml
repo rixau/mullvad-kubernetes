@@ -65,14 +65,14 @@ spec:
           {{- toYaml $proxy.resources | nindent 10 }}
         livenessProbe:
           httpGet:
-            path: /health
+            path: /
             port: health
           initialDelaySeconds: 30
           periodSeconds: 30
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
-            path: /health
+            path: /
             port: health
           initialDelaySeconds: 10
           periodSeconds: 10

@@ -46,6 +46,8 @@ proxies:
         value: "3128"
       - name: PROXY_AUTH
         value: "false"
+      - name: DEBUG_LOGGING
+        value: "false"
     
   # Free Salmon VPN server  
   free-salmon:
@@ -70,6 +72,8 @@ proxies:
       - name: HTTP_PORT
         value: "3128"
       - name: PROXY_AUTH
+        value: "false"
+      - name: DEBUG_LOGGING
         value: "false"
 
 # Pod annotations
