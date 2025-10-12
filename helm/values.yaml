@@ -31,9 +31,6 @@ proxies:
       secretName: "mullvad-golden-crab"
       configKey: "wg0.conf"
     resources:
-      limits:
-        cpu: 200m
-        memory: 256Mi
       requests:
         cpu: 100m
         memory: 128Mi
@@ -58,9 +55,6 @@ proxies:
       secretName: "mullvad-free-salmon"
       configKey: "wg0.conf"
     resources:
-      limits:
-        cpu: 200m
-        memory: 256Mi
       requests:
         cpu: 100m
         memory: 128Mi
