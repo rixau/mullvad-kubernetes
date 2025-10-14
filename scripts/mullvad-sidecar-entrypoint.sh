@@ -325,13 +325,34 @@ fi
 # Start health probe server on port 9999 (if enabled)
 if [ "$ENABLE_HEALTH_PROBE" = "true" ]; then
     echo "🩺 Starting health probe server on :9999..."
-    {
-        while true; do
-            {
-                echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
-            } | nc -l -p 9999 >/dev/null 2>&1 || sleep 1
-        done
-    } &
+    python3 -c '
+import socket
+import signal
+import sys
+
+def signal_handler(sig, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server_socket.bind(("0.0.0.0", 9999))
+server_socket.listen(5)
+
+while True:
+    try:
+        client_socket, address = server_socket.accept()
+        try:
+            client_socket.recv(1024)  # Read the request
+            response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
+            client_socket.sendall(response)
+        finally:
+            client_socket.close()
+    except Exception:
+        pass
+' &
     HEALTH_PID=$!
     echo "✅ Health probe server started (PID: $HEALTH_PID)"
 else
