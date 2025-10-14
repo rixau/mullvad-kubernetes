@@ -23,6 +23,8 @@ RUN apt-get update && \
     openresolv \
     dante-server \
     tinyproxy \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

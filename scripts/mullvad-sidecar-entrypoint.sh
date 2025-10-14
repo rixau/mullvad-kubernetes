@@ -25,6 +25,12 @@ cleanup() {
         echo "✅ Health probe server stopped"
     fi
     
+    # Kill metrics exporter
+    if [ -n "$METRICS_PID" ]; then
+        kill $METRICS_PID 2>/dev/null || true
+        echo "✅ Metrics exporter stopped"
+    fi
+    
     # Bring down WireGuard
     wg-quick down wg0 2>/dev/null || true
     
@@ -291,6 +297,15 @@ if [ "$ENABLE_PROXY_MODE" = "true" ]; then
         echo "❌ ERROR: SOCKS5 proxy (dante) failed to start"
         echo "❌ CRITICAL: Proxy pool mode requires SOCKS5 proxy"
         exit 1
+    fi
+    
+    # Start metrics exporter if available
+    if [ -f /usr/local/bin/metrics-exporter.py ]; then
+        echo "📊 Starting metrics exporter..."
+        python3 /usr/local/bin/metrics-exporter.py &
+        METRICS_PID=$!
+        echo "✅ Metrics exporter started (PID: $METRICS_PID)"
+        echo "   Metrics endpoint: http://0.0.0.0:${METRICS_PORT:-9090}/metrics"
     fi
     
     # Check HTTP proxy (optional - warn if failed)

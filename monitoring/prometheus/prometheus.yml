@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'local-dev'
+    environment: 'docker-compose'
+
+scrape_configs:
+  - job_name: 'proxy-metrics'
+    static_configs:
+      - targets: ['mullvad-mighty-bird:9090']
+        labels:
+          proxy_name: 'mighty-bird'
+          vpn_provider: 'mullvad'
+    
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9091']
+

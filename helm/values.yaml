@@ -45,6 +45,8 @@ proxies:
         value: "false"
       - name: DEBUG_LOGGING
         value: "false"
+      - name: PROXY_NAME
+        value: "golden-crab"
     
   # Free Salmon VPN server  
   free-salmon:
@@ -69,6 +71,8 @@ proxies:
         value: "false"
       - name: DEBUG_LOGGING
         value: "false"
+      - name: PROXY_NAME
+        value: "free-salmon"
 
 # Pod annotations
 podAnnotations: {}
