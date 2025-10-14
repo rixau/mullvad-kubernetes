@@ -43,6 +43,10 @@ RUN chmod +x /usr/local/bin/configure-proxy.sh
 COPY scripts/mullvad-sidecar-entrypoint.sh /usr/local/bin/mullvad-sidecar-entrypoint.sh
 RUN chmod +x /usr/local/bin/mullvad-sidecar-entrypoint.sh
 
+# Add metrics exporter script
+COPY scripts/metrics-exporter.py /usr/local/bin/metrics-exporter.py
+RUN chmod +x /usr/local/bin/metrics-exporter.py
+
 # Set working directory
 WORKDIR /tmp/mullvad
 
