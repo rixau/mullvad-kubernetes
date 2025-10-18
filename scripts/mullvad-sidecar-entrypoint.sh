@@ -329,12 +329,62 @@ if [ "$ENABLE_HEALTH_PROBE" = "true" ]; then
 import socket
 import signal
 import sys
+import subprocess
+import re
 
 def signal_handler(sig, frame):
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
+
+def check_vpn_health():
+    """Check VPN health by validating WireGuard handshake freshness"""
+    try:
+        # Run wg show to get handshake info
+        result = subprocess.run(
+            ["wg", "show", "wg0"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode != 0:
+            return False, "wg0 interface not found"
+        
+        output = result.stdout
+        
+        # Check if peer is configured
+        if "peer:" not in output:
+            return False, "no peer configured"
+        
+        # Check handshake freshness
+        if "latest handshake:" in output:
+            handshake_line = [line for line in output.split("\n") if "latest handshake:" in line]
+            if handshake_line:
+                handshake_info = handshake_line[0].split("latest handshake:")[-1].strip()
+                
+                # Fail if handshake is too old (days, hours, or >3 minutes)
+                if "day" in handshake_info or "hour" in handshake_info:
+                    return False, f"stale handshake: {handshake_info}"
+                
+                # Check minutes
+                minutes_match = re.search(r"(\d+)\s+minute", handshake_info)
+                if minutes_match:
+                    minutes = int(minutes_match.group(1))
+                    if minutes > 3:
+                        return False, f"handshake {minutes}min old (max 3min)"
+                
+                # Fresh handshake (seconds or <3 minutes)
+                return True, f"healthy: {handshake_info}"
+        else:
+            # No handshake yet - might be initial connection
+            return False, "no handshake yet"
+        
+        return True, "vpn active"
+        
+    except Exception as e:
+        return False, f"health check error: {str(e)}"
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -346,7 +396,16 @@ while True:
         client_socket, address = server_socket.accept()
         try:
             client_socket.recv(1024)  # Read the request
-            response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nVPN is active"
+            
+            # Actually check VPN health
+            is_healthy, status_msg = check_vpn_health()
+            
+            if is_healthy:
+                response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(status_msg)}\r\n\r\n{status_msg}".encode()
+            else:
+                error_msg = f"VPN unhealthy: {status_msg}"
+                response = f"HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: {len(error_msg)}\r\n\r\n{error_msg}".encode()
+            
             client_socket.sendall(response)
         finally:
             client_socket.close()
@@ -355,6 +414,7 @@ while True:
 ' &
     HEALTH_PID=$!
     echo "✅ Health probe server started (PID: $HEALTH_PID)"
+    echo "   Health checks now validate WireGuard handshake freshness"
 else
     echo "⚠️  Health probe disabled via ENABLE_HEALTH_PROBE=false"
 fi

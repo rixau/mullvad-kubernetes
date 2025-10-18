@@ -111,4 +111,4 @@ stringData:
     PublicKey = MULLVAD_SERVER_PUBLIC_KEY
     AllowedIPs = 0.0.0.0/0,::0/0
     Endpoint = MULLVAD_SERVER_IP:51820
-    PersistentKeepalive = 25
+    PersistentKeepalive = 25  # CRITICAL: Keeps tunnel alive, prevents stale connections

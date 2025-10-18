@@ -129,7 +129,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
             self.end_headers()
     
     def check_vpn_status(self):
-        """Check if WireGuard VPN is connected"""
+        """Check if WireGuard VPN is connected with fresh handshake"""
         try:
             result = subprocess.run(['wg', 'show', 'wg0'], 
                                   capture_output=True, 
@@ -137,10 +137,36 @@ class MetricsHandler(BaseHTTPRequestHandler):
                                   timeout=2)
             if result.returncode == 0:
                 output = result.stdout
-                # Check if peer is configured (VPN interface is up)
-                # For proxy use, if peer exists, consider it "up"
-                # Handshake may not appear until first traffic
-                return 'peer:' in output
+                
+                # Check if peer is configured
+                if 'peer:' not in output:
+                    return False
+                
+                # Check handshake freshness (critical for detecting stale tunnels)
+                if 'latest handshake:' in output:
+                    handshake_line = [line for line in output.split('\n') if 'latest handshake:' in line]
+                    if handshake_line:
+                        handshake_info = handshake_line[0].split('latest handshake:')[-1].strip()
+                        
+                        # VPN is DOWN if handshake is stale (days, hours, or >3 minutes)
+                        if 'day' in handshake_info or 'hour' in handshake_info:
+                            return False
+                        
+                        # Check minutes
+                        import re
+                        minutes_match = re.search(r'(\d+)\s+minute', handshake_info)
+                        if minutes_match:
+                            minutes = int(minutes_match.group(1))
+                            if minutes > 3:
+                                return False  # Stale handshake
+                        
+                        # Fresh handshake - VPN is UP
+                        return True
+                    return False
+                else:
+                    # No handshake yet - VPN not fully connected
+                    return False
+            
             return False
         except:
             return False

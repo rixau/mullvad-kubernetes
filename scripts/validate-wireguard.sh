@@ -32,14 +32,47 @@ if [ -z "$WG_INTERFACE_IP" ]; then
 fi
 echo "🔍 WireGuard interface IP: $WG_INTERFACE_IP"
 
-# Basic validation - just validate that wg0 interface exists and has an IP
-# The actual external IP check will be done by your application
-echo "🌐 Basic WireGuard validation - checking wg0 interface..."
-if [ -n "$WG_INTERFACE_IP" ]; then
-    echo "✅ WireGuard validation successful - wg0 interface active with IP: $WG_INTERFACE_IP"
-    echo "📝 Note: External IP routing will be validated by your application"
-    exit 0
-else
-    echo "❌ ERROR: wg0 interface has no IP address"
+# Validate WireGuard peer and handshake
+echo "🔍 Checking WireGuard peer configuration..."
+if ! wg show wg0 peer >/dev/null 2>&1; then
+    echo "❌ ERROR: No WireGuard peer configured"
     exit 1
 fi
+
+# Check handshake freshness (critical for detecting stale tunnels)
+echo "🔍 Checking WireGuard handshake freshness..."
+WG_OUTPUT=$(wg show wg0)
+if echo "$WG_OUTPUT" | grep -q "latest handshake:"; then
+    HANDSHAKE_INFO=$(echo "$WG_OUTPUT" | grep "latest handshake:" | sed 's/.*latest handshake: //')
+    echo "📅 Latest handshake: $HANDSHAKE_INFO"
+    
+    # Check if handshake is stale (more than 3 minutes old)
+    # Fresh handshakes with PersistentKeepalive should be within 25-30 seconds
+    if echo "$HANDSHAKE_INFO" | grep -qE "(minute|hour|day)"; then
+        # Extract time value
+        if echo "$HANDSHAKE_INFO" | grep -q "day"; then
+            echo "❌ ERROR: Handshake is DAYS old - VPN tunnel is stale!"
+            exit 1
+        elif echo "$HANDSHAKE_INFO" | grep -q "hour"; then
+            echo "❌ ERROR: Handshake is HOURS old - VPN tunnel is stale!"
+            exit 1
+        elif echo "$HANDSHAKE_INFO" | grep -qE "[0-9]+ minute"; then
+            MINUTES=$(echo "$HANDSHAKE_INFO" | grep -oE "[0-9]+" | head -1)
+            if [ "$MINUTES" -gt 3 ]; then
+                echo "❌ ERROR: Handshake is $MINUTES minutes old - VPN tunnel is stale! (max: 3 minutes)"
+                exit 1
+            else
+                echo "⚠️  WARNING: Handshake is $MINUTES minutes old (consider checking PersistentKeepalive)"
+            fi
+        fi
+    else
+        echo "✅ Handshake is fresh (within last minute)"
+    fi
+else
+    echo "⚠️  WARNING: No handshake information available (tunnel may not be established yet)"
+    # Allow this for initial connection, but log warning
+fi
+
+echo "✅ WireGuard validation successful - wg0 interface active with IP: $WG_INTERFACE_IP"
+echo "✅ VPN tunnel is healthy with recent peer handshake"
+exit 0
