@@ -34,10 +34,12 @@ echo "🔍 WireGuard interface IP: $WG_INTERFACE_IP"
 
 # Validate WireGuard peer and handshake
 echo "🔍 Checking WireGuard peer configuration..."
-if ! wg show wg0 peer >/dev/null 2>&1; then
+WG_PEER_CHECK=$(wg show wg0 2>/dev/null | grep -c "peer:")
+if [ "$WG_PEER_CHECK" -eq 0 ]; then
     echo "❌ ERROR: No WireGuard peer configured"
     exit 1
 fi
+echo "✅ WireGuard peer configured"
 
 # Check handshake freshness (critical for detecting stale tunnels)
 echo "🔍 Checking WireGuard handshake freshness..."
