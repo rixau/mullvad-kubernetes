@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Mullvad WireGuard Sidecar Entrypoint
+# Mullvad WireGuard SOCKS5 Proxy Pool Entrypoint
 # Sets up WireGuard VPN connection with no-leak security and health monitoring
 
 set -e
@@ -51,7 +51,7 @@ cleanup() {
 # Set up signal handlers for graceful exit
 trap cleanup SIGTERM SIGINT SIGQUIT
 
-echo "🚀 Starting Mullvad WireGuard Sidecar..."
+echo "🚀 Starting Mullvad WireGuard SOCKS5 Proxy..."
 
 # Environment variable controls (defaults for maximum compatibility)
 ENABLE_KILL_SWITCH=${ENABLE_KILL_SWITCH:-false}
@@ -140,7 +140,7 @@ echo "✅ VPN connection established"
 # Validate VPN connection is working
 echo "🔍 Validating VPN connection..."
 if ! /usr/local/bin/validate-wireguard.sh; then
-    echo "❌ ERROR: VPN validation failed - sidecar will exit"
+    echo "❌ ERROR: VPN validation failed - proxy will exit"
     exit 1
 fi
 
@@ -196,7 +196,7 @@ if [ "$ENABLE_PROXY_MODE" = "true" ]; then
     
     echo "✅ Proxy pool mode active (SOCKS5 ready)"
 else
-    echo "⚠️  Proxy mode disabled (sidecar mode)"
+    echo "⚠️  Proxy mode disabled (standalone mode)"
 fi
 
 # Start health probe server on port 9999 (if enabled)
@@ -305,7 +305,7 @@ while true; do
         if [ $(($(date +%s) % 300)) -eq 0 ]; then
             echo "🔍 Periodic VPN validation..."
             if ! /usr/local/bin/validate-wireguard.sh; then
-                echo "❌ ERROR: VPN validation failed during monitoring - sidecar will exit"
+                echo "❌ ERROR: VPN validation failed during monitoring - proxy will exit"
                 exit 1
             fi
             echo "✅ VPN connection healthy"
@@ -324,11 +324,11 @@ while true; do
             echo "✅ VPN reconnected successfully"
             # Validate reconnection worked
             if ! /usr/local/bin/validate-wireguard.sh; then
-                echo "❌ ERROR: VPN reconnection failed validation - sidecar will exit"
+                echo "❌ ERROR: VPN reconnection failed validation - proxy will exit"
                 exit 1
             fi
         else
-            echo "❌ ERROR: VPN reconnection failed - sidecar will exit"
+            echo "❌ ERROR: VPN reconnection failed - proxy will exit"
             exit 1
         fi
     fi
