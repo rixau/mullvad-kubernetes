@@ -80,47 +80,7 @@ echo "✅ Found WireGuard config file"
 DEFAULT_GW=$(ip route | grep default | awk '{print $3}')
 DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}')
 echo "🌐 Current gateway: $DEFAULT_GW via interface: $DEFAULT_IFACE"
-
-# Pre-configure bypass routes for internal networks (if enabled)
-if [ "$ENABLE_BYPASS_ROUTES" = "true" ]; then
-    echo "🔧 Pre-configuring bypass routes for internal networks..."
-
-    # Detect environment and configure appropriate bypass routes
-    if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
-    # Running in Kubernetes - bypass cluster networks
-    echo "🎯 Kubernetes environment detected"
-    echo "🔧 Attempting to configure bypass routes..."
-    
-    # Try to add bypass routes, but don't fail if permissions are insufficient
-    ROUTES_ADDED=0
-    if ip route add 10.42.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
-    if ip route add 10.0.0.0/8 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
-    if ip route add 172.16.0.0/12 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
-    if ip route add 192.168.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then ROUTES_ADDED=$((ROUTES_ADDED+1)); fi
-    
-    if [ $ROUTES_ADDED -gt 0 ]; then
-        echo "✅ Kubernetes cluster bypass routes configured ($ROUTES_ADDED/4 routes added)"
-    else
-        echo "⚠️  Could not configure bypass routes (insufficient permissions)"
-        echo "🔄 Continuing with WireGuard setup - internal connectivity may be limited"
-    fi
-else
-    # Running in Docker Compose - bypass Docker networks
-    echo "🐳 Docker Compose environment detected"
-    # Get all current Docker networks and add bypass routes
-    for network in $(ip route | grep -E "172\.(1[6-9]|2[0-9]|3[01])\." | awk '{print $1}' | sort -u); do
-        ip route add $network via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true
-    done
-    # Add common Docker network ranges
-    ip route add 172.17.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Default bridge
-    ip route add 172.18.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
-    ip route add 172.19.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
-    ip route add 172.20.0.0/16 via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null || true # Custom networks
-    echo "✅ Docker Compose bypass routes configured"
-    fi
-else
-    echo "⚠️  Bypass routes disabled via ENABLE_BYPASS_ROUTES=false"
-fi
+echo "📦 SOCKS5 Proxy Pool Mode - No internal routing needed"
 
 # Extract Mullvad peer info for handshake exception
 MULLVAD_ENDPOINT=$(grep "^Endpoint" /etc/wireguard/wg0.conf | cut -d'=' -f2 | tr -d ' ')
@@ -130,88 +90,36 @@ MULLVAD_PORT=$(echo $MULLVAD_ENDPOINT | cut -d':' -f2)
 echo "🔐 Using mounted Mullvad WireGuard configuration..."
 echo "📄 Mullvad endpoint: $MULLVAD_ENDPOINT"
 
-# Set up no-leak egress policy BEFORE starting VPN (if enabled)
-if [ "$ENABLE_KILL_SWITCH" = "true" ]; then
-    echo "🛡️  Setting up no-leak security policy..."
-
-    # Try to set up no-leak security policy (gracefully handle permission errors)
-    if iptables -A OUTPUT -p udp --dport $MULLVAD_PORT -d $MULLVAD_IP -j ACCEPT 2>/dev/null && \
-       iptables -A OUTPUT -o lo -j ACCEPT 2>/dev/null && \
-       iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null && \
-       iptables -P OUTPUT DROP 2>/dev/null; then
-        echo "✅ No-leak security policy active - only WireGuard and established connections allowed"
-    else
-        echo "⚠️  Could not configure iptables kill-switch (insufficient permissions)"
-        echo "🔄 Continuing with WireGuard setup - VPN will work but without kill-switch protection"
-    fi
+# CRITICAL: Add bypass route for Mullvad endpoint BEFORE starting WireGuard
+# This prevents routing loop where handshake packets try to go through the VPN that doesn't exist yet
+echo "🔧 Adding bypass route for Mullvad endpoint..."
+if ip route add $MULLVAD_IP via $DEFAULT_GW dev $DEFAULT_IFACE 2>/dev/null; then
+    echo "✅ Mullvad endpoint bypass route added: $MULLVAD_IP via $DEFAULT_GW"
 else
-    echo "⚠️  Kill-switch disabled via ENABLE_KILL_SWITCH=false"
-    echo "🔄 VPN will work without traffic leak protection"
+    echo "⚠️  Could not add bypass route for Mullvad endpoint (may already exist)"
+    echo "   This is critical for handshake establishment!"
 fi
 
-# Start WireGuard (handle DNS gracefully)
+# Kill-switch not needed for SOCKS5 proxy pool mode
+
+# Start WireGuard
 echo "🔗 Starting Mullvad WireGuard connection..."
 
-# Preserve original DNS settings before starting WireGuard
-echo "🔧 Preserving original DNS configuration..."
-cp /etc/resolv.conf /tmp/original-resolv.conf
-
-# Set environment to avoid resolvconf issues and prevent DNS override
+# Disable resolvconf to avoid DNS issues
 export RESOLVCONF=no
 
-# Try wg-quick, handle potential DNS errors gracefully
+# Start WireGuard
 if wg-quick up wg0 2>&1 | tee /tmp/wg-output; then
     echo "✅ WireGuard started successfully"
 elif grep -q "resolvconf: command not found" /tmp/wg-output; then
-    echo "⚠️  DNS setup failed but WireGuard interface is up, continuing..."
-    # WireGuard interface should still be up even if DNS failed
+    echo "⚠️  DNS setup warning (interface still up)"
 else
     echo "❌ ERROR: WireGuard failed to start"
     cat /tmp/wg-output
     exit 1
 fi
 
-# DNS configuration (conditional based on environment variable)
-if [ "$ENABLE_DNS_CONFIG" = "true" ]; then
-    echo "🔧 DNS configuration enabled"
-    if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
-        echo "🔧 Kubernetes environment detected - skipping DNS modification"
-        echo "⚠️  Using default cluster DNS configuration"
-        echo "🔄 External traffic will route through WireGuard, internal through cluster DNS"
-    else
-    # Fix DNS configuration for internal service resolution (non-fatal)
-    echo "🔧 Configuring hybrid DNS for internal and external resolution..."
-
-    # Attempt DNS configuration in a way that never fails the script
-    set +e  # Temporarily disable exit on error
-    {
-        cat > /etc/resolv.conf << EOF
-# Hybrid DNS configuration for VPN + internal services
-# Original DNS for internal services (Docker/Kubernetes)
-$(grep "nameserver" /tmp/original-resolv.conf | head -1 2>/dev/null || echo "nameserver 8.8.8.8")
-# Mullvad DNS for external resolution
-nameserver 10.64.0.1
-# Search domains from original config
-$(grep "search" /tmp/original-resolv.conf 2>/dev/null || echo "")
-EOF
-    } >/dev/null 2>&1
-
-    DNS_RESULT=$?
-    set -e  # Re-enable exit on error
-
-    if [ $DNS_RESULT -eq 0 ]; then
-        echo "✅ Hybrid DNS configuration applied"
-        echo "📄 DNS Configuration:"
-        cat /etc/resolv.conf 2>/dev/null || echo "Could not read DNS config"
-    else
-        echo "⚠️  Could not modify /etc/resolv.conf (insufficient permissions)"
-        echo "🔄 Using default DNS configuration - external resolution may use original DNS"
-    fi
-    fi
-else
-    echo "⚠️  DNS configuration disabled via ENABLE_DNS_CONFIG=false"
-    echo "🔄 Using default DNS configuration"
-fi
+echo "⚠️  Using default DNS (SOCKS5 proxy pool mode - no DNS override needed)"
 
 # Wait for WireGuard to establish connection
 echo "⏳ Waiting for WireGuard to connect..."
@@ -227,38 +135,7 @@ for i in {1..30}; do
     sleep 2
 done
 
-# Allow WireGuard interface traffic (after interface is up) - only if kill-switch is enabled
-if [ "$ENABLE_KILL_SWITCH" = "true" ]; then
-    if iptables -A OUTPUT -o wg0 -j ACCEPT 2>/dev/null; then
-        echo "✅ WireGuard interface traffic allowed"
-    else
-        echo "⚠️  Could not configure WireGuard interface iptables rules (insufficient permissions)"
-        echo "🔄 VPN connection established - traffic routing may not be fully controlled"
-    fi
-else
-    echo "⚠️  Skipping WireGuard iptables rules (kill-switch disabled)"
-fi
-
-# Fix routing priority for external traffic in hostNetwork mode
-if [ -n "$KUBERNETES_SERVICE_HOST" ] && ip route show | grep -q "hostNetwork\|ens160"; then
-    echo "🔧 Fixing external traffic routing priority..."
-    
-    # Add higher priority rule to route external traffic through VPN
-    if ip rule add from all to 0.0.0.0/0 lookup 51820 priority 100 2>/dev/null; then
-        echo "✅ Added high-priority VPN routing rule"
-    else
-        echo "⚠️  Could not add VPN routing rule (insufficient permissions)"
-    fi
-    
-    # Ensure external traffic uses VPN by modifying default route priority
-    if ip route add default dev wg0 metric 50 2>/dev/null; then
-        echo "✅ Added high-priority VPN default route"
-    else
-        echo "⚠️  Could not modify default route priority"
-    fi
-fi
-
-echo "✅ VPN connection established with bypass routes for internal connectivity"
+echo "✅ VPN connection established"
 
 # Validate VPN connection is working
 echo "🔍 Validating VPN connection..."
