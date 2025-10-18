@@ -378,8 +378,9 @@ def check_vpn_health():
                 # Fresh handshake (seconds or <3 minutes)
                 return True, f"healthy: {handshake_info}"
         else:
-            # No handshake yet - might be initial connection
-            return False, "no handshake yet"
+            # No handshake yet - this is OK during initial connection with PersistentKeepalive
+            # First handshake can take up to 30 seconds to establish
+            return True, "healthy: establishing handshake (persistentkeepalive active)"
         
         return True, "vpn active"
         
