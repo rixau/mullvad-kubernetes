@@ -27,11 +27,11 @@ services:
       # - PROXY_USERNAME=proxy
       # - PROXY_PASSWORD=changeme
     volumes:
-      - ./conf/free-salmon.conf:/etc/wireguard/wg0.conf:ro
+      - ./conf/smart-dove.conf:/etc/wireguard/wg0.conf:ro
     ports:
-      - "1080:1080"   # SOCKS5
-      - "3128:3128"   # HTTP
-      - "9990:9999"   # Health probe
+      - "10800:1080"   # SOCKS5 (10800 on host to avoid conflicts)
+      - "13128:3128"   # HTTP (13128 on host to avoid conflicts)
+      - "9998:9999"   # Health probe (9998 to avoid conflicts)
     networks:
       - proxy-network
 

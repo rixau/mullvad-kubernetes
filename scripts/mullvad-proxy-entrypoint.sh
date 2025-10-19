@@ -255,9 +255,31 @@ def check_vpn_health():
                 # Fresh handshake (seconds or <3 minutes)
                 return True, f"healthy: {handshake_info}"
         else:
-            # No handshake yet - this is OK during initial connection with PersistentKeepalive
-            # First handshake can take up to 30 seconds to establish
-            return True, "healthy: establishing handshake (persistentkeepalive active)"
+            # No handshake yet - check if we have been sending data without response
+            # If transfer shows more than 1KB sent but 0 received, credentials are invalid
+            transfer_lines = [line for line in output.split("\n") if "transfer:" in line]
+            if transfer_lines:
+                transfer_info = transfer_lines[0]
+                # Extract sent bytes - look for pattern like 1.45 KiB sent or 244 B sent
+                if "sent" in transfer_info:
+                    sent_match = re.search(r"(\d+\.?\d*)\s+(B|KiB|MiB)\s+sent", transfer_info)
+                    if sent_match:
+                        sent_value = float(sent_match.group(1))
+                        sent_unit = sent_match.group(2)
+                        
+                        # Convert to bytes
+                        sent_bytes = sent_value
+                        if sent_unit == "KiB":
+                            sent_bytes = sent_value * 1024
+                        elif sent_unit == "MiB":
+                            sent_bytes = sent_value * 1024 * 1024
+                        
+                        # If we have sent more than 1KB but received nothing and no handshake, credentials are bad
+                        if sent_bytes > 1024 and "0 B received" in transfer_info:
+                            return False, "invalid credentials: sending packets but no handshake"
+            
+            # Still in grace period (first 60 seconds)
+            return True, "establishing: waiting for first handshake"
         
         return True, "vpn active"
         

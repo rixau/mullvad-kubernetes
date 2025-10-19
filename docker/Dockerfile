@@ -40,8 +40,8 @@ COPY scripts/configure-proxy.sh /usr/local/bin/configure-proxy.sh
 RUN chmod +x /usr/local/bin/configure-proxy.sh
 
 # Add Mullvad sidecar entrypoint
-COPY scripts/mullvad-sidecar-entrypoint.sh /usr/local/bin/mullvad-sidecar-entrypoint.sh
-RUN chmod +x /usr/local/bin/mullvad-sidecar-entrypoint.sh
+COPY scripts/mullvad-proxy-entrypoint.sh /usr/local/bin/mullvad-proxy-entrypoint.sh
+RUN chmod +x /usr/local/bin/mullvad-proxy-entrypoint.sh
 
 # Add metrics exporter script
 COPY scripts/metrics-exporter.py /usr/local/bin/metrics-exporter.py
@@ -51,4 +51,4 @@ RUN chmod +x /usr/local/bin/metrics-exporter.py
 WORKDIR /tmp/mullvad
 
 # Use the Mullvad sidecar entrypoint
-ENTRYPOINT ["/usr/local/bin/mullvad-sidecar-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/mullvad-proxy-entrypoint.sh"]
