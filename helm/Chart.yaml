@@ -3,7 +3,7 @@ name: mullvad-proxy-pool
 description: A Helm chart for Mullvad VPN Proxy Pool with SOCKS5 and HTTP proxy support
 type: application
 version: 0.5.0
-appVersion: "0.6.1"
+appVersion: "0.6.2"
 keywords:
   - vpn
   - wireguard
