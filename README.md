@@ -9,6 +9,10 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 - **`ENABLE_DNS_CONFIG=false`** (default): Skip DNS modification to avoid conflicts
 - **`ENABLE_BYPASS_ROUTES=true`** (default): Keep internal network bypass routes
 - **`ENABLE_HEALTH_PROBE=true`** (default): Enable health monitoring on port 9999
+- **`ENABLE_PROXY_MODE=true`**: Enable SOCKS5 and HTTP proxy servers
+- **`SOCKS5_PORT=1080`**: SOCKS5 proxy port
+- **`HTTP_PORT=3128`**: HTTP proxy port (tinyproxy)
+- **`METRICS_PORT=9090`**: Prometheus metrics exporter port
 
 ### No-Leak Egress Policy (When Enabled)
 - **Kill Switch**: If the VPN tunnel drops, the OUTPUT iptables policy drops all non-WireGuard traffic
@@ -27,6 +31,16 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 - **Response**: `VPN is active` when tunnel is operational
 - **Integration**: Perfect for Kubernetes `livenessProbe` and `readinessProbe`
 
+### Prometheus Metrics
+- **Port 9090**: Prometheus metrics exporter (when `METRICS_PORT` is set)
+- **Metrics Exposed**:
+  - `vpn_connection_status` - VPN connection status (1=up, 0=down)
+  - `proxy_active_connections` - Current active proxy connections
+  - `proxy_request_rate_permin` - Request rate per minute
+  - `proxy_bytes_transferred_total` - Total bytes transferred
+  - `proxy_requests_failed_total` - Failed requests counter
+  - `proxy_info` - Proxy information gauge
+
 ### Graceful Exit Handling
 - **Signal Handling**: Responds to SIGTERM, SIGINT, SIGQUIT
 - **Clean Shutdown**: Properly tears down VPN and restores iptables
@@ -36,6 +50,7 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 - **Active Monitoring**: Checks VPN status every 30 seconds
 - **Validation**: Periodic external IP verification every 5 minutes
 - **Auto-Recovery**: Automatic reconnection on tunnel failure
+- **Grafana Dashboard**: Pre-built dashboard for proxy pool monitoring (see `/dashboards/`)
 
 ## 🛠️ Configuration Management
 
@@ -93,7 +108,35 @@ cd mullvad-kubernetes
 ./test-mullvad.sh
 ```
 
-### 3. Docker Compose Integration
+### 3. Docker Compose - Proxy Pool Mode
+
+Run a pool of VPN proxies with different exit locations:
+
+```bash
+# Start proxy pool (US, Brazil, Canada)
+docker compose up -d
+
+# Check proxy status
+docker compose ps
+
+# View metrics
+curl http://localhost:19090/metrics  # US proxy
+curl http://localhost:19091/metrics  # Brazil proxy
+curl http://localhost:19092/metrics  # Canada proxy
+
+# Run test apps (optional)
+docker compose -f docker-compose-test.yml up
+```
+
+The proxy pool provides:
+- **SOCKS5 Proxy**: Ports 10800 (US), 1081 (BR), 1082 (CA)
+- **HTTP Proxy**: Ports 13128 (US), 3129 (BR), 3130 (CA)
+- **Health Checks**: Ports 9998 (US), 9991 (BR), 9992 (CA)
+- **Metrics**: Ports 19090 (US), 19091 (BR), 19092 (CA)
+
+### 4. Docker Compose - Sidecar Integration
+
+Use VPN as a sidecar for your application:
 
 ```yaml
 services:
@@ -113,13 +156,18 @@ services:
     privileged: true
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - ENABLE_PROXY_MODE=true
+      - METRICS_PORT=9090
     volumes:
       - ./conf/your-config.conf:/etc/wireguard/wg0.conf:ro
     ports:
+      - "1080:1080"  # SOCKS5
       - "9999:9999"  # Health probe
+      - "9090:9090"  # Metrics
 ```
 
-### 4. Kubernetes Integration
+### 5. Kubernetes Integration
 
 ```yaml
 apiVersion: apps/v1
@@ -320,10 +368,35 @@ For production use, consider:
 
 ## 📊 Monitoring Integration
 
+### Prometheus & Grafana
+
+The proxy pool includes full Prometheus metrics and a pre-built Grafana dashboard:
+
+```bash
+# Prometheus scrapes metrics from each proxy
+# Configure in prometheus.yml:
+- job_name: 'mullvad-proxy'
+  static_configs:
+    - targets: 
+        - 'mullvad-proxy-us:9090'
+        - 'mullvad-proxy-br:9090'
+        - 'mullvad-proxy-ca:9090'
+```
+
+**Grafana Dashboard** (`dashboards/proxy-pool-dashboard.json`):
+- VPN connection status per location
+- Request rates and failures
+- Active connections over time
+- Data transfer statistics
+- Multi-location comparison
+
+### Health Check Integration
+
 The health probe integrates with popular monitoring systems:
 
-- **Prometheus**: Scrape `:9999` endpoint
-- **Kubernetes**: Native health checks
+- **Prometheus**: Scrape `:9090` metrics endpoint
+- **Health Checks**: Basic health on `:9999` endpoint
+- **Kubernetes**: Native liveness/readiness probes
 - **Docker**: Container health status
 - **Custom**: HTTP monitoring tools
 

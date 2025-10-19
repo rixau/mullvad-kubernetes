@@ -1,0 +1,75 @@
+services:
+  # Test app that uses the proxy pool via SOCKS5
+  test-app-socks5:
+    image: curlimages/curl:latest
+    container_name: test-app-socks5
+    networks:
+      - mullvad-kubernetes_proxy-network
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Testing Mullvad VPN Proxy Pool with SOCKS5...'
+        echo 'Waiting for proxies to be ready...'
+        sleep 45
+        echo ''
+        echo '========================================='
+        echo 'Testing US Proxy (SOCKS5)'
+        echo '========================================='
+        IP_US=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-us:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "US Proxy IP: $$IP_US"
+        echo ''
+        echo '========================================='
+        echo 'Testing Brazil Proxy (SOCKS5)'
+        echo '========================================='
+        IP_BR=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-br:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "Brazil Proxy IP: $$IP_BR"
+        echo ''
+        echo '========================================='
+        echo 'Testing Canada Proxy (SOCKS5)'
+        echo '========================================='
+        IP_CA=$$(curl -s --max-time 15 --proxy socks5h://mullvad-proxy-ca:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+        echo "Canada Proxy IP: $$IP_CA"
+        echo ''
+        echo '========================================='
+        echo 'SUMMARY'
+        echo '========================================='
+        echo "US Proxy:     $$IP_US"
+        echo "Brazil Proxy: $$IP_BR"
+        echo "Canada Proxy: $$IP_CA"
+        echo ''
+        if [ "$$IP_US" != "$$IP_BR" ] && [ "$$IP_BR" != "$$IP_CA" ]; then
+          echo 'SUCCESS: All proxies are working with different IPs!'
+        else
+          echo 'WARNING: Some proxies may have the same IP'
+        fi
+        echo ''
+        echo 'Starting continuous monitoring (checking US proxy every 60s)...'
+        while true; do
+          sleep 60
+          NEW_IP=$$(curl -s --max-time 10 --proxy socks5h://mullvad-proxy-us:1080 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+          echo "$$(date): US Proxy IP: $$NEW_IP"
+        done
+
+  # Test app that uses the proxy pool via HTTP
+  test-app-http:
+    image: curlimages/curl:latest
+    container_name: test-app-http
+    networks:
+      - mullvad-kubernetes_proxy-network
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Testing Mullvad VPN Proxy Pool with HTTP proxy...'
+        sleep 45
+        while true; do
+          IP=$$(curl -s --max-time 15 --proxy http://mullvad-proxy-us:3128 http://httpbin.org/ip | grep -o '"origin": "[^"]*"' | cut -d'"' -f4)
+          echo "$$(date): HTTP Proxy IP: $$IP"
+          sleep 60
+        done
+
+networks:
+  mullvad-kubernetes_proxy-network:
+    external: true
+
