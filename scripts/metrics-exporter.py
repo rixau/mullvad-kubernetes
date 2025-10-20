@@ -268,11 +268,29 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 def resolve_ip_to_container(ip_address):
     """Try to resolve IP address to container name"""
+    # Try getent for Docker network DNS
+    try:
+        result = subprocess.run(
+            ['getent', 'hosts', ip_address],
+            capture_output=True,
+            text=True,
+            timeout=1
+        )
+        if result.returncode == 0 and result.stdout:
+            # Format: "IP_ADDRESS  hostname"
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                return parts[1]
+    except:
+        pass
+    
+    # Fallback to Python socket DNS lookup
     try:
         hostname = socket.gethostbyaddr(ip_address)[0]
         return hostname
     except:
-        return ip_address
+        # If all fails, return clean IP format
+        return ip_address.replace('.', '_')
 
 def monitor_dante_logs():
     """Monitor dante logs and extract metrics"""
