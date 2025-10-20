@@ -23,23 +23,7 @@
             },
             "inspect": false
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "❌ DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "✅ UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -59,7 +43,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 200
+                "value": 150
               }
             ]
           },
@@ -100,28 +84,138 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Request Rate (req/min)"
+              "options": "Success Rate %"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "reqpm"
+                "value": "percent"
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 90
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 95
+                    },
+                    {
+                      "color": "green",
+                      "value": 99
+                    }
+                  ]
+                }
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Data Transfer"
+              "options": "Latency (ms)"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "bytes"
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 200
+                    },
+                    {
+                      "color": "orange",
+                      "value": 500
+                    },
+                    {
+                      "color": "red",
+                      "value": 1000
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Speed (Mbps)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Mbits"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 5
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 10
+                    },
+                    {
+                      "color": "green",
+                      "value": 20
+                    }
+                  ]
+                }
               }
             ]
           },
@@ -134,6 +228,52 @@
               {
                 "id": "unit",
                 "value": "short"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 10
+                    },
+                    {
+                      "color": "orange",
+                      "value": 20
+                    },
+                    {
+                      "color": "red",
+                      "value": 30
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Conn Duration (s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           }
@@ -174,27 +314,41 @@
         },
         {
           "datasource": "Prometheus",
-          "expr": "proxy_request_rate_permin",
+          "expr": "proxy_success_rate_percent",
           "format": "table",
           "instant": true,
           "refId": "C"
         },
         {
           "datasource": "Prometheus",
-          "expr": "proxy_bytes_transferred_total",
+          "expr": "proxy_latency_ms",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
           "datasource": "Prometheus",
-          "expr": "proxy_active_connections",
+          "expr": "proxy_download_speed_mbps",
           "format": "table",
           "instant": true,
           "refId": "E"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "proxy_active_connections",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "proxy_avg_connection_duration_seconds",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
         }
       ],
-      "title": "🖥️  Proxy Pool Status",
+      "title": "🖥️  Proxy Pool Performance Status",
       "transformations": [
         {
           "id": "seriesToColumns",
@@ -218,9 +372,11 @@
               "proxy_name": "Proxy Name",
               "Value #A": "Info",
               "Value #B": "VPN Status",
-              "Value #C": "Request Rate (req/min)",
-              "Value #D": "Data Transfer",
-              "Value #E": "Active Connections"
+              "Value #C": "Success Rate %",
+              "Value #D": "Latency (ms)",
+              "Value #E": "Speed (Mbps)",
+              "Value #F": "Active Connections",
+              "Value #G": "Avg Conn Duration (s)"
             }
           }
         },
@@ -231,9 +387,11 @@
               "names": [
                 "Proxy Name",
                 "VPN Status",
-                "Request Rate (req/min)",
-                "Data Transfer",
-                "Active Connections"
+                "Success Rate %",
+                "Latency (ms)",
+                "Speed (Mbps)",
+                "Active Connections",
+                "Avg Conn Duration (s)"
               ]
             }
           }
@@ -251,7 +409,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Latency (ms)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -275,7 +433,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -285,15 +443,27 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 200
+              },
+              {
+                "color": "orange",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
           },
-          "unit": "reqpm"
+          "unit": "ms"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
         "y": 8
@@ -314,18 +484,12 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "proxy_request_rate_permin",
-          "legendFormat": "{{proxy_name}} - Request Rate",
+          "expr": "proxy_latency_ms",
+          "legendFormat": "{{proxy_name}}",
           "refId": "A"
-        },
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(proxy_requests_failed_total[1m]) * 60",
-          "legendFormat": "{{proxy_name}} - Failed Requests",
-          "refId": "B"
         }
       ],
-      "title": "📊 Request Rate & Failures (per minute)",
+      "title": "⚡ Connection Latency",
       "type": "timeseries"
     },
     {
@@ -338,7 +502,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Download Speed (Mbps)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -362,7 +526,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -370,17 +534,29 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 20
               }
             ]
           },
-          "unit": "short"
+          "unit": "Mbits"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
         "y": 8
@@ -388,7 +564,7 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": ["last", "max"],
+          "calcs": ["last", "max", "mean"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -401,12 +577,12 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "proxy_active_connections",
+          "expr": "proxy_download_speed_mbps",
           "legendFormat": "{{proxy_name}}",
           "refId": "A"
         }
       ],
-      "title": "🔌 Active Connections",
+      "title": "🚀 Download Speed",
       "type": "timeseries"
     },
     {
@@ -419,11 +595,11 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Failed Requests",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "tooltip": false,
@@ -443,7 +619,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -453,31 +629,30 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 10
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "short"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "Bps"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
-        "y": 17
+        "y": 16
       },
       "id": 4,
       "options": {
@@ -495,18 +670,105 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "proxy_bytes_transferred_total",
-          "legendFormat": "{{proxy_name}} - Total Bytes",
+          "expr": "increase(proxy_requests_failed_total[1m])",
+          "legendFormat": "{{proxy_name}}",
           "refId": "A"
+        }
+      ],
+      "title": "❌ Failed Requests",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100000
+              },
+              {
+                "color": "orange",
+                "value": 500000
+              },
+              {
+                "color": "red",
+                "value": 1000000
+              }
+            ]
+          },
+          "unit": "Bps"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": ["last", "max", "mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
         {
           "datasource": "Prometheus",
           "expr": "rate(proxy_bytes_transferred_total[1m])",
-          "legendFormat": "{{proxy_name}} - Bytes/sec",
-          "refId": "B"
+          "legendFormat": "{{proxy_name}}",
+          "refId": "A"
         }
       ],
-      "title": "💾 Data Transfer",
+      "title": "💾 Data Transfer Rate",
       "type": "timeseries"
     }
   ],
@@ -525,6 +787,6 @@
   "timezone": "",
   "title": "Mullvad Proxy Pool - Performance Dashboard",
   "uid": "mullvad-proxy-pool",
-  "version": 2,
+  "version": 4,
   "weekStart": ""
 }

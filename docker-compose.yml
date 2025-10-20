@@ -28,6 +28,7 @@ services:
       # - PROXY_PASSWORD=changeme
       # Metrics configuration
       - METRICS_PORT=9090
+      - PROXY_NAME=simple-dog
     volumes:
       - ./conf/simple-dog.conf:/etc/wireguard/wg0.conf:ro
     ports:
@@ -35,6 +36,12 @@ services:
       - "13128:3128"   # HTTP (13128 on host to avoid conflicts)
       - "9998:9999"    # Health probe (9998 to avoid conflicts)
       - "19090:9090"   # Metrics (19090 to avoid conflicts)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9999 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - proxy-network
       - burban-network
@@ -63,6 +70,7 @@ services:
       - HTTP_PORT=3128
       - PROXY_AUTH=false
       - METRICS_PORT=9090
+      - PROXY_NAME=mighty-bird
     volumes:
       - ./conf/mighty-bird.conf:/etc/wireguard/wg0.conf:ro
     ports:
@@ -70,6 +78,12 @@ services:
       - "3129:3128"   # HTTP
       - "9991:9999"   # Health probe
       - "19091:9090"  # Metrics
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9999 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - proxy-network
       - burban-network
@@ -98,6 +112,7 @@ services:
       - HTTP_PORT=3128
       - PROXY_AUTH=false
       - METRICS_PORT=9090
+      - PROXY_NAME=mature-ibex
     volumes:
       - ./conf/mature-ibex.conf:/etc/wireguard/wg0.conf:ro
     ports:
@@ -105,6 +120,12 @@ services:
       - "3130:3128"   # HTTP
       - "9992:9999"   # Health probe
       - "19092:9090"  # Metrics
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9999 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - proxy-network
       - burban-network
