@@ -81,7 +81,7 @@ class ProxyMetrics:
             return 100.0  # No requests yet, assume healthy
         return (self.successful_requests / total) * 100.0
         
-    def record_request(self, success=True, bytes_sent=0, host="unknown"):
+    def record_request(self, success=True, bytes_sent=0, host="unknown", client="unknown"):
         with self.lock:
             self.request_count += 1
             # Update bytes from interface stats
@@ -92,6 +92,9 @@ class ProxyMetrics:
             else:
                 self.failed_requests += 1
             self.requests_by_host[host] += 1
+            # Track requests by client container
+            if client != "unknown":
+                self.requests_by_host[client] += 1
             self.last_request_time = time.time()
     
     def update_latency(self, latency_ms):
@@ -202,6 +205,16 @@ class MetricsHandler(BaseHTTPRequestHandler):
             output.append(f'vpn_connection_status{{proxy_name="{PROXY_NAME}"}} {vpn_up}')
             output.append('')
             
+            # Requests by client/container
+            output.append('# HELP proxy_requests_by_client_total Total requests by client container')
+            output.append('# TYPE proxy_requests_by_client_total counter')
+            for client, count in metrics.requests_by_host.items():
+                if count > 0:
+                    # Clean up client name for prometheus label
+                    client_label = client.replace('.', '_').replace('-', '_')
+                    output.append(f'proxy_requests_by_client_total{{proxy_name="{PROXY_NAME}",client="{client_label}"}} {count}')
+            output.append('')
+            
             self.wfile.write('\n'.join(output).encode('utf-8'))
         else:
             self.send_response(404)
@@ -253,6 +266,14 @@ class MetricsHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress HTTP server logs
 
+def resolve_ip_to_container(ip_address):
+    """Try to resolve IP address to container name"""
+    try:
+        hostname = socket.gethostbyaddr(ip_address)[0]
+        return hostname
+    except:
+        return ip_address
+
 def monitor_dante_logs():
     """Monitor dante logs and extract metrics"""
     connection_start_times = {}  # Track connection start times by connection ID
@@ -268,10 +289,19 @@ def monitor_dante_logs():
         
         for line in process.stdout:
             # Parse dante log lines for connection info
-            # Example: "info: pass(1): tcp/connect"
+            # Example: "info: pass(1): tcp/connect: 172.23.0.10:52345 -> 172.23.0.5:1080"
+            client_name = "unknown"
+            
+            # Extract client IP from various dante log formats
+            # Format 1: "172.23.0.10:52345 ->"
+            client_match = re.search(r'(\d+\.\d+\.\d+\.\d+):\d+\s*->', line)
+            if client_match:
+                client_ip = client_match.group(1)
+                client_name = resolve_ip_to_container(client_ip)
+            
             if 'pass' in line or 'block' in line:
                 success = 'pass' in line
-                metrics.record_request(success=success)
+                metrics.record_request(success=success, client=client_name)
             
             # Track connection duration
             # Look for connection start/end patterns
