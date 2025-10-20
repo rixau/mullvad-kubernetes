@@ -289,15 +289,18 @@ def monitor_dante_logs():
         
         for line in process.stdout:
             # Parse dante log lines for connection info
-            # Example: "info: pass(1): tcp/connect: 172.23.0.10:52345 -> 172.23.0.5:1080"
+            # Example: "info: pass(1): tcp/accept ]: 172.23.0.10.52345 172.23.0.5.1080"
+            # Format: "IP.port IP.port" where first IP is client
             client_name = "unknown"
             
-            # Extract client IP from various dante log formats
-            # Format 1: "172.23.0.10:52345 ->"
-            client_match = re.search(r'(\d+\.\d+\.\d+\.\d+):\d+\s*->', line)
+            # Extract client IP from dante log format
+            # Pattern: "]: IP.port IP.port" or "tcp/accept ]: IP.port"
+            client_match = re.search(r'\]:\s+(\d+\.\d+\.\d+\.\d+)\.\d+\s+\d+\.\d+\.\d+\.\d+\.\d+', line)
             if client_match:
                 client_ip = client_match.group(1)
-                client_name = resolve_ip_to_container(client_ip)
+                # Skip localhost health checks
+                if client_ip != "127.0.0.1":
+                    client_name = resolve_ip_to_container(client_ip)
             
             if 'pass' in line or 'block' in line:
                 success = 'pass' in line
