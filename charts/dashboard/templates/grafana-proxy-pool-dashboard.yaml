@@ -1,0 +1,20 @@
+{{- if .Values.dashboards.proxyPoolPerformance.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mullvad-proxy-pool-dashboards.fullname" . }}-proxy-pool-dashboard
+  namespace: {{ .Values.grafana.namespace }}
+  labels:
+    {{- include "mullvad-proxy-pool-dashboards.labels" . | nindent 4 }}
+    {{- range $key, $value := .Values.grafana.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := .Values.grafana.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+data:
+  proxy-pool-dashboard.json: |
+{{ .Files.Get "dashboards/proxy-pool-dashboard.json" | indent 4 }}
+{{- end }}
+

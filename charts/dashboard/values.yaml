@@ -1,0 +1,25 @@
+# Default values for mullvad-proxy-pool-dashboards
+# This Helm chart deploys Grafana dashboards for Mullvad VPN Proxy Pool monitoring
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Grafana configuration
+grafana:
+  # Namespace where Grafana is deployed
+  namespace: monitoring
+  
+  # Labels to apply to dashboard ConfigMaps
+  # These labels tell Grafana to automatically discover and import the dashboards
+  labels:
+    grafana_dashboard: "1"
+  
+  # Annotations for dashboard ConfigMaps
+  annotations: {}
+
+# Dashboard configuration
+dashboards:
+  # Mullvad Proxy Pool Performance Dashboard
+  proxyPoolPerformance:
+    enabled: true
+

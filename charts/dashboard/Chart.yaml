@@ -1,0 +1,19 @@
+apiVersion: v2
+name: mullvad-proxy-pool-dashboards
+description: Grafana dashboards for Mullvad VPN Proxy Pool monitoring
+type: application
+version: 0.5.0
+appVersion: "0.6.2"
+keywords:
+  - grafana
+  - dashboards
+  - monitoring
+  - vpn
+  - proxy
+  - mullvad
+home: https://github.com/rixau/mullvad-kubernetes
+sources:
+  - https://github.com/rixau/mullvad-kubernetes
+maintainers:
+  - name: R2
+

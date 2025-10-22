@@ -5,6 +5,8 @@
 # Examples:
 #   ./scripts/version.sh app patch    # Bump app version (creates new Docker image)
 #   ./scripts/version.sh chart patch  # Bump chart version (for Helm template changes)
+#
+# Note: Both proxy and dashboard charts are version-locked and updated together
 
 set -e
 
@@ -13,6 +15,11 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Chart paths
+PROXY_CHART="charts/proxy/Chart.yaml"
+PROXY_VALUES="charts/proxy/values.yaml"
+DASHBOARD_CHART="charts/dashboard/Chart.yaml"
 
 # Function to print colored output
 print_status() {
@@ -31,7 +38,7 @@ print_error() {
 if [[ $(git branch --show-current) != "main" ]]; then
     print_error "Must be on main branch to version"
     exit 1
-fi
+fi     
 
 # Check if working directory is clean
 if [[ -n $(git status --porcelain) ]]; then
@@ -63,12 +70,12 @@ fi
 
 print_status "Bumping $TARGET_TYPE $VERSION_TYPE version..."
 
-# Get current version based on target type
+# Get current version based on target type (from proxy chart)
 if [[ "$TARGET_TYPE" == "app" ]]; then
-    CURRENT_VERSION=$(grep '^appVersion:' helm/Chart.yaml | sed 's/appVersion: "//' | sed 's/"//')
+    CURRENT_VERSION=$(grep '^appVersion:' $PROXY_CHART | sed 's/appVersion: "//' | sed 's/"//')
     print_status "Current app version: $CURRENT_VERSION"
 else
-    CURRENT_VERSION=$(grep '^version:' helm/Chart.yaml | sed 's/version: //')
+    CURRENT_VERSION=$(grep '^version:' $PROXY_CHART | sed 's/version: //')
     print_status "Current chart version: $CURRENT_VERSION"
 fi
 
@@ -98,33 +105,39 @@ print_status "New version: $NEW_VERSION"
 
 # Update files based on target type
 if [[ "$TARGET_TYPE" == "app" ]]; then
-    # Update appVersion in Chart.yaml (leave chart version unchanged)
-    sed -i "s/^appVersion: .*/appVersion: \"$NEW_VERSION\"/" helm/Chart.yaml
+    # Update appVersion in both Chart.yaml files (leave chart version unchanged)
+    sed -i "s/^appVersion: .*/appVersion: \"$NEW_VERSION\"/" $PROXY_CHART
+    sed -i "s/^appVersion: .*/appVersion: \"$NEW_VERSION\"/" $DASHBOARD_CHART
     
     # Update values.yaml with new image tag
-    sed -i "s/^  tag: .*/  tag: \"$NEW_VERSION\"/" helm/values.yaml
+    sed -i "s/^  tag: .*/  tag: \"$NEW_VERSION\"/" $PROXY_VALUES
     
-    print_status "Updated Helm chart appVersion to $NEW_VERSION"
-    print_status "Updated image tag in values.yaml to $NEW_VERSION"
-    print_warning "Chart version unchanged - use './scripts/version.sh chart patch' to update chart version"
+    print_status "Updated proxy chart appVersion to $NEW_VERSION"
+    print_status "Updated dashboard chart appVersion to $NEW_VERSION"
+    print_status "Updated image tag in proxy values.yaml to $NEW_VERSION"
+    print_warning "Chart versions unchanged - use './scripts/version.sh chart patch' to update chart versions"
     
-    FILES_TO_COMMIT="helm/Chart.yaml helm/values.yaml"
+    FILES_TO_COMMIT="$PROXY_CHART $DASHBOARD_CHART $PROXY_VALUES"
     COMMIT_MESSAGE="chore: bump app version to v$NEW_VERSION
 
-- Updated appVersion in Chart.yaml
-- Updated image tag in values.yaml
+- Updated appVersion in both proxy and dashboard charts
+- Updated image tag in proxy values.yaml
+- Charts remain version-locked
 - Docker image will be built and pushed by CI/CD"
 else
-    # Update chart version in Chart.yaml (leave appVersion unchanged)
-    sed -i "s/^version: .*/version: $NEW_VERSION/" helm/Chart.yaml
+    # Update chart version in both Chart.yaml files (leave appVersion unchanged)
+    sed -i "s/^version: .*/version: $NEW_VERSION/" $PROXY_CHART
+    sed -i "s/^version: .*/version: $NEW_VERSION/" $DASHBOARD_CHART
     
-    print_status "Updated Helm chart version to $NEW_VERSION"
-    print_status "App version unchanged (still $(grep '^appVersion:' helm/Chart.yaml | sed 's/appVersion: "//' | sed 's/"//')))"
+    print_status "Updated proxy chart version to $NEW_VERSION"
+    print_status "Updated dashboard chart version to $NEW_VERSION"
+    print_status "App version unchanged (still $(grep '^appVersion:' $PROXY_CHART | sed 's/appVersion: "//' | sed 's/"//')))"
     
-    FILES_TO_COMMIT="helm/Chart.yaml"
+    FILES_TO_COMMIT="$PROXY_CHART $DASHBOARD_CHART"
     COMMIT_MESSAGE="chore: bump chart version to $NEW_VERSION
 
-- Updated chart version for Helm template changes
+- Updated chart version for both proxy and dashboard charts
+- Charts remain version-locked at $NEW_VERSION
 - App version unchanged (no new Docker image needed)"
 fi
 
@@ -154,10 +167,12 @@ print_status "Version bump complete! 🎉"
 if [[ "$TARGET_TYPE" == "app" ]]; then
     print_status "GitHub Actions will now build and publish ghcr.io/rixau/mullvad-kubernetes:$NEW_VERSION"
     print_status "Tagged as: $TAG_NAME"
+    print_status "Both proxy and dashboard charts updated with new appVersion"
     print_warning "Remember to update Flux HelmRelease if needed (chart version may need updating too)"
 else
-    print_status "Chart version updated - ready for Flux deployment"
+    print_status "Chart versions updated - ready for Flux deployment"
     print_status "Tagged as: $TAG_NAME"
+    print_status "Both proxy and dashboard charts are version-locked at $NEW_VERSION"
     print_status "No new Docker image will be built (app version unchanged)"
 fi
 

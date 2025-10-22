@@ -50,7 +50,7 @@ A secure, production-ready WireGuard sidecar container for Mullvad VPN integrati
 - **Active Monitoring**: Checks VPN status every 30 seconds
 - **Validation**: Periodic external IP verification every 5 minutes
 - **Auto-Recovery**: Automatic reconnection on tunnel failure
-- **Grafana Dashboard**: Pre-built dashboard for proxy pool monitoring (see `/dashboards/`)
+- **Grafana Dashboard**: Pre-built dashboard for proxy pool monitoring (see [charts/dashboard/](charts/dashboard/))
 
 ## 🛠️ Configuration Management
 
@@ -167,7 +167,26 @@ services:
       - "9090:9090"  # Metrics
 ```
 
-### 5. Kubernetes Integration
+### 5. Helm Charts (Recommended)
+
+The easiest way to deploy to Kubernetes is using the provided Helm charts:
+
+```bash
+# 1. Deploy Mullvad configs as secrets
+./scripts/deploy-configs.sh my-namespace
+
+# 2. Install proxy chart
+helm install mullvad-proxy ./charts/proxy --namespace vpn-proxy-pool
+
+# 3. Install dashboard chart (optional, requires Grafana)
+helm install mullvad-dashboards ./charts/dashboard
+```
+
+See [charts/README.md](charts/README.md) for detailed Helm chart documentation.
+
+### 6. Kubernetes Integration (Manual)
+
+For manual deployment without Helm:
 
 ```yaml
 apiVersion: apps/v1
@@ -383,7 +402,7 @@ The proxy pool includes full Prometheus metrics and a pre-built Grafana dashboar
         - 'mullvad-proxy-ca:9090'
 ```
 
-**Grafana Dashboard** (`dashboards/proxy-pool-dashboard.json`):
+**Grafana Dashboard** (`charts/dashboard/dashboards/proxy-pool-dashboard.json`):
 - VPN connection status per location
 - Request rates and failures
 - Active connections over time
