@@ -2,7 +2,7 @@ apiVersion: v2
 name: mullvad-proxy-pool-dashboards
 description: Grafana dashboards for Mullvad VPN Proxy Pool monitoring
 type: application
-version: 0.5.0
+version: 0.5.1
 appVersion: "0.6.2"
 keywords:
   - grafana
