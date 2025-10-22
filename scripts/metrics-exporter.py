@@ -180,23 +180,26 @@ class MetricsHandler(BaseHTTPRequestHandler):
             output.append(f'proxy_request_rate_permin{{proxy_name="{PROXY_NAME}"}} {request_rate_per_min:.2f}')
             output.append('')
             
-            # Latency (milliseconds)
-            output.append('# HELP proxy_latency_ms Proxy connection latency in milliseconds')
-            output.append('# TYPE proxy_latency_ms gauge')
-            output.append(f'proxy_latency_ms{{proxy_name="{PROXY_NAME}"}} {metrics.latency_ms:.2f}')
-            output.append('')
+            # Latency (milliseconds) - skip if still initial value of 0
+            if metrics.latency_ms != 0:
+                output.append('# HELP proxy_latency_ms Proxy connection latency in milliseconds')
+                output.append('# TYPE proxy_latency_ms gauge')
+                output.append(f'proxy_latency_ms{{proxy_name="{PROXY_NAME}"}} {metrics.latency_ms:.2f}')
+                output.append('')
             
-            # Download speed (Mbps)
-            output.append('# HELP proxy_download_speed_mbps Proxy download speed in Mbps')
-            output.append('# TYPE proxy_download_speed_mbps gauge')
-            output.append(f'proxy_download_speed_mbps{{proxy_name="{PROXY_NAME}"}} {metrics.download_speed_mbps:.2f}')
-            output.append('')
+            # Download speed (Mbps) - skip if still initial value of 0
+            if metrics.download_speed_mbps != 0:
+                output.append('# HELP proxy_download_speed_mbps Proxy download speed in Mbps')
+                output.append('# TYPE proxy_download_speed_mbps gauge')
+                output.append(f'proxy_download_speed_mbps{{proxy_name="{PROXY_NAME}"}} {metrics.download_speed_mbps:.2f}')
+                output.append('')
             
-            # Average connection duration
-            output.append('# HELP proxy_avg_connection_duration_seconds Average connection duration in seconds')
-            output.append('# TYPE proxy_avg_connection_duration_seconds gauge')
-            output.append(f'proxy_avg_connection_duration_seconds{{proxy_name="{PROXY_NAME}"}} {metrics.avg_connection_duration:.2f}')
-            output.append('')
+            # Average connection duration - skip if still initial value of 0
+            if metrics.avg_connection_duration != 0:
+                output.append('# HELP proxy_avg_connection_duration_seconds Average connection duration in seconds')
+                output.append('# TYPE proxy_avg_connection_duration_seconds gauge')
+                output.append(f'proxy_avg_connection_duration_seconds{{proxy_name="{PROXY_NAME}"}} {metrics.avg_connection_duration:.2f}')
+                output.append('')
             
             # VPN connection status (check WireGuard)
             vpn_up = 1 if self.check_vpn_status() else 0
@@ -359,6 +362,7 @@ def periodic_latency_check():
     print(f"🔍 Starting periodic latency checks (every 30s)...")
     
     while True:
+        print(f"⏱️  Running latency check at {time.strftime('%H:%M:%S')}...")
         try:
             # Test latency through SOCKS5 proxy
             start_time = time.time()
@@ -443,14 +447,17 @@ def main():
     # Start log monitoring in background
     monitor_thread = Thread(target=monitor_dante_logs, daemon=True)
     monitor_thread.start()
+    print(f"✅ Started log monitoring thread (PID: {monitor_thread.ident})")
     
     # Start latency check thread
     latency_thread = Thread(target=periodic_latency_check, daemon=True)
     latency_thread.start()
+    print(f"✅ Started latency check thread (PID: {latency_thread.ident})")
     
     # Start speed test thread
     speed_thread = Thread(target=periodic_speed_test, daemon=True)
     speed_thread.start()
+    print(f"✅ Started speed test thread (PID: {speed_thread.ident})")
     
     # Start metrics HTTP server
     port = int(os.getenv('METRICS_PORT', '9090'))
