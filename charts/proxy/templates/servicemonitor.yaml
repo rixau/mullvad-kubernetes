@@ -1,0 +1,22 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "mullvad-proxy-pool.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mullvad-proxy-pool.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vpn-proxy-monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "mullvad-proxy-pool.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: vpn-proxy-lb
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.metrics.scrapeInterval }}
+    scrapeTimeout: {{ .Values.metrics.scrapeTimeout }}
+    path: /metrics
+{{- end }}
+

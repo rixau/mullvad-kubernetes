@@ -48,6 +48,9 @@ spec:
         - name: health
           containerPort: {{ $.Values.service.ports.health }}
           protocol: TCP
+        - name: metrics
+          containerPort: {{ $.Values.service.ports.metrics }}
+          protocol: TCP
         env:
         {{- with $proxy.env }}
         {{- toYaml . | nindent 8 }}

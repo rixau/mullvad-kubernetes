@@ -18,6 +18,13 @@ service:
     socks5: 1080
     http: 3128
     health: 9999
+    metrics: 9090
+
+# Prometheus metrics configuration
+metrics:
+  enabled: true
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
 
 # Proxy pool configuration
 # Each proxy instance will be deployed as a separate pod

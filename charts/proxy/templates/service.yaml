@@ -21,6 +21,10 @@ spec:
     targetPort: health
     protocol: TCP
     name: health
+  - port: {{ .Values.service.ports.metrics }}
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
   selector:
     app.kubernetes.io/name: {{ include "mullvad-proxy-pool.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
