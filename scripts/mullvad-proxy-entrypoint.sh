@@ -105,14 +105,19 @@ echo "   Base MTU: $ETH_MTU"
 echo "   WireGuard overhead: 80 bytes"
 echo "   Calculated WireGuard MTU: $WG_MTU"
 
-# Inject MTU into WireGuard config if not already present
-if grep -q "^MTU" /etc/wireguard/wg0.conf; then
-    echo "⚠️  MTU already configured in wg0.conf, replacing with calculated value"
-    sed -i "/^MTU/d" /etc/wireguard/wg0.conf
-fi
+# Copy config to writable location and inject MTU
+# The mounted config might be read-only, so we work with a copy
+echo "📝 Preparing WireGuard configuration with calculated MTU..."
+cp /etc/wireguard/wg0.conf /tmp/wg0.conf
+
+# Remove any existing MTU lines
+sed -i "/^MTU/d" /tmp/wg0.conf
 
 # Add MTU after [Interface] section
-sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /etc/wireguard/wg0.conf
+sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /tmp/wg0.conf
+
+# Move the modified config back
+mv /tmp/wg0.conf /etc/wireguard/wg0.conf
 echo "✅ WireGuard MTU configured: $WG_MTU"
 
 # Get current network info before starting VPN
