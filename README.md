@@ -94,13 +94,22 @@ serviceB:
 2. Download your WireGuard configuration file(s)
 3. Place them in the `./conf/` directory
 
-### 2. Test Locally
+### 2. Build the Image (Optional)
+
+The image is available on GHCR, but you can build it locally:
 
 ```bash
 # Clone the repository
 git clone https://github.com/rixau/mullvad-kubernetes.git
 cd mullvad-kubernetes
 
+# Build the Docker image
+docker build -t mullvad-kubernetes:latest .
+```
+
+### 3. Test Locally
+
+```bash
 # Place your Mullvad config in conf/
 # Example: ./conf/br-sao-wg-001.conf
 
@@ -108,7 +117,7 @@ cd mullvad-kubernetes
 ./test-mullvad.sh
 ```
 
-### 3. Docker Compose - Proxy Pool Mode
+### 4. Docker Compose - Proxy Pool Mode
 
 Run a pool of VPN proxies with different exit locations:
 
@@ -134,7 +143,7 @@ The proxy pool provides:
 - **Health Checks**: Ports 9998 (US), 9991 (BR), 9992 (CA)
 - **Metrics**: Ports 19090 (US), 19091 (BR), 19092 (CA)
 
-### 4. Docker Compose - Sidecar Integration
+### 5. Docker Compose - Sidecar Integration
 
 Use VPN as a sidecar for your application:
 
@@ -167,7 +176,7 @@ services:
       - "9090:9090"  # Metrics
 ```
 
-### 5. Helm Charts (Recommended)
+### 6. Helm Charts (Recommended)
 
 The easiest way to deploy to Kubernetes is using the provided Helm charts:
 
@@ -179,12 +188,12 @@ The easiest way to deploy to Kubernetes is using the provided Helm charts:
 helm install mullvad-proxy ./charts/proxy --namespace vpn-proxy-pool
 
 # 3. Install dashboard chart (optional, requires Grafana)
-helm install mullvad-dashboards ./charts/dashboard
+helm install mullvad-dashboards ./charts/dashboard --namespace monitoring
 ```
 
 See [charts/README.md](charts/README.md) for detailed Helm chart documentation.
 
-### 6. Kubernetes Integration (Manual)
+### 7. Kubernetes Integration (Manual)
 
 For manual deployment without Helm:
 
@@ -389,25 +398,63 @@ For production use, consider:
 
 ### Prometheus & Grafana
 
-The proxy pool includes full Prometheus metrics and a pre-built Grafana dashboard:
+The proxy pool includes full Prometheus metrics and a pre-built Grafana dashboard.
 
-```bash
-# Prometheus scrapes metrics from each proxy
-# Configure in prometheus.yml:
-- job_name: 'mullvad-proxy'
-  static_configs:
-    - targets: 
-        - 'mullvad-proxy-us:9090'
-        - 'mullvad-proxy-br:9090'
-        - 'mullvad-proxy-ca:9090'
+#### Automatic Prometheus Discovery
+
+The Helm chart includes Prometheus service annotations for automatic discovery:
+
+```yaml
+# Service annotations (automatically added by Helm chart)
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
 ```
 
-**Grafana Dashboard** (`charts/dashboard/dashboards/proxy-pool-dashboard.json`):
+Prometheus will automatically discover and scrape metrics via its `kubernetes-service-endpoints` job.
+
+#### Manual Prometheus Configuration
+
+For manual setup, add a scrape job:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'mullvad-proxy'
+    static_configs:
+      - targets: 
+          - 'mullvad-proxy-us:9090'
+          - 'mullvad-proxy-br:9090'
+          - 'mullvad-proxy-ca:9090'
+```
+
+#### Grafana Dashboard
+
+**Pre-built Dashboard** (`charts/dashboard/dashboards/proxy-pool-dashboard.json`):
 - VPN connection status per location
 - Request rates and failures
 - Active connections over time
 - Data transfer statistics
 - Multi-location comparison
+
+Install the dashboard via Helm:
+```bash
+helm install mullvad-dashboards ./charts/dashboard --namespace monitoring
+```
+
+#### Available Metrics
+
+- `vpn_connection_status` - VPN tunnel status (1=up, 0=down)
+- `proxy_info` - Proxy identification and metadata
+- `proxy_bytes_transferred_total` - Total bytes transferred
+- `proxy_requests_successful_total` - Successful requests counter
+- `proxy_requests_failed_total` - Failed requests counter
+- `proxy_success_rate_percent` - Success rate percentage
+- `proxy_active_connections` - Current active connections
+- `proxy_request_rate_permin` - Request rate per minute
+- `proxy_latency_ms` - Connection latency
+- `proxy_download_speed_mbps` - Download speed
 
 ### Health Check Integration
 
