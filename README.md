@@ -253,6 +253,28 @@ spec:
 
 ## 🔧 Configuration
 
+### Automatic MTU Detection
+
+The sidecar automatically detects and configures the optimal MTU for WireGuard based on the underlying network:
+
+- **Detection**: Reads the base MTU from the pod's network interface (typically eth0)
+- **Calculation**: Subtracts WireGuard overhead (~80 bytes for UDP + WireGuard headers)
+- **Safety**: Ensures minimum MTU of 1280 bytes (IPv6 requirement)
+- **Dynamic**: Works with any CNI (Calico, Flannel, Cilium, etc.) without hard-coded values
+
+Example:
+```
+🔍 Detecting network MTU for WireGuard configuration...
+📊 Network MTU Analysis:
+   Interface: eth0
+   Base MTU: 1450
+   WireGuard overhead: 80 bytes
+   Calculated WireGuard MTU: 1370
+✅ WireGuard MTU configured: 1370
+```
+
+This ensures optimal performance across different cluster configurations without manual tuning.
+
 ### Environment Variables
 
 The sidecar automatically detects its environment:

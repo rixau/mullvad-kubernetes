@@ -3,7 +3,7 @@ services:
   mullvad-proxy-us:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
     container_name: mullvad-proxy-us
     cap_add:
       - NET_ADMIN

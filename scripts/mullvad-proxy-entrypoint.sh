@@ -76,6 +76,45 @@ fi
 
 echo "✅ Found WireGuard config file"
 
+# Dynamic MTU Detection - Calculate safe MTU based on underlying network
+echo "🔍 Detecting network MTU for WireGuard configuration..."
+DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}')
+if [ -z "$DEFAULT_IFACE" ]; then
+    # Fallback to eth0 if no default route found yet
+    DEFAULT_IFACE="eth0"
+fi
+
+ETH_MTU=$(ip link show "$DEFAULT_IFACE" 2>/dev/null | awk '/mtu/ {print $5}')
+if [ -z "$ETH_MTU" ]; then
+    echo "⚠️  Could not detect interface MTU, using safe default"
+    ETH_MTU=1500
+fi
+
+# Subtract WireGuard overhead (UDP + WireGuard headers = ~80 bytes)
+WG_MTU=$((ETH_MTU - 80))
+
+# Ensure minimum MTU of 1280 (IPv6 minimum)
+if [ "$WG_MTU" -lt 1280 ]; then
+    echo "⚠️  Calculated MTU ($WG_MTU) below IPv6 minimum, clamping to 1280"
+    WG_MTU=1280
+fi
+
+echo "📊 Network MTU Analysis:"
+echo "   Interface: $DEFAULT_IFACE"
+echo "   Base MTU: $ETH_MTU"
+echo "   WireGuard overhead: 80 bytes"
+echo "   Calculated WireGuard MTU: $WG_MTU"
+
+# Inject MTU into WireGuard config if not already present
+if grep -q "^MTU" /etc/wireguard/wg0.conf; then
+    echo "⚠️  MTU already configured in wg0.conf, replacing with calculated value"
+    sed -i "/^MTU/d" /etc/wireguard/wg0.conf
+fi
+
+# Add MTU after [Interface] section
+sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /etc/wireguard/wg0.conf
+echo "✅ WireGuard MTU configured: $WG_MTU"
+
 # Get current network info before starting VPN
 DEFAULT_GW=$(ip route | grep default | awk '{print $3}')
 DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}')
