@@ -712,12 +712,12 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "increase(proxy_bytes_transferred_total[1m])",
+          "expr": "increase(proxy_bytes_transferred_total[5m])",
           "legendFormat": "{{proxy_name}}",
           "refId": "A"
         }
       ],
-      "title": "💾 Data Transfer (per minute)",
+      "title": "💾 Data Transfer (per 5 minutes)",
       "type": "timeseries"
     }
   ],
