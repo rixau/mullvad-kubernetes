@@ -763,7 +763,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "rate(proxy_bytes_transferred_total[1m])",
+          "expr": "rate(proxy_bytes_transferred_total[5m])",
           "legendFormat": "{{proxy_name}}",
           "refId": "A"
         }
