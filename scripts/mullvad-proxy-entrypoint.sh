@@ -32,7 +32,7 @@ cleanup() {
     fi
     
     # Bring down WireGuard
-    wg-quick down /tmp/wg0-dynamic.conf 2>/dev/null || true
+    wg-quick down /tmp/wireguard/wg0.conf 2>/dev/null || true
     
     # Restore original DNS configuration
     if [ -f /tmp/original-resolv.conf ]; then
@@ -107,16 +107,18 @@ echo "   Calculated WireGuard MTU: $WG_MTU"
 
 # Copy config to writable location and inject MTU
 # The mounted config is read-only, so we work with a copy in /tmp
+# We name it wg0.conf to keep the interface name as wg0
 echo "📝 Preparing WireGuard configuration with calculated MTU..."
-cp /etc/wireguard/wg0.conf /tmp/wg0-dynamic.conf
+mkdir -p /tmp/wireguard
+cp /etc/wireguard/wg0.conf /tmp/wireguard/wg0.conf
 
 # Remove any existing MTU lines
-sed -i "/^MTU/d" /tmp/wg0-dynamic.conf
+sed -i "/^MTU/d" /tmp/wireguard/wg0.conf
 
 # Add MTU after [Interface] section
-sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /tmp/wg0-dynamic.conf
+sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /tmp/wireguard/wg0.conf
 
-echo "✅ WireGuard MTU configured: $WG_MTU (using /tmp/wg0-dynamic.conf)"
+echo "✅ WireGuard MTU configured: $WG_MTU (using /tmp/wireguard/wg0.conf)"
 
 # Get current network info before starting VPN
 DEFAULT_GW=$(ip route | grep default | awk '{print $3}')
@@ -151,7 +153,7 @@ echo "🔗 Starting Mullvad WireGuard connection..."
 export RESOLVCONF=no
 
 # Start WireGuard using the dynamic config
-if wg-quick up /tmp/wg0-dynamic.conf 2>&1 | tee /tmp/wg-output; then
+if wg-quick up /tmp/wireguard/wg0.conf 2>&1 | tee /tmp/wg-output; then
     echo "✅ WireGuard started successfully"
 elif grep -q "resolvconf: command not found" /tmp/wg-output; then
     echo "⚠️  DNS setup warning (interface still up)"
@@ -378,9 +380,9 @@ while true; do
         echo "⚠️  VPN connection lost, attempting to reconnect..."
         
         # Restart WireGuard
-        wg-quick down /tmp/wg0-dynamic.conf || true
+        wg-quick down /tmp/wireguard/wg0.conf || true
         sleep 5
-        wg-quick up /tmp/wg0-dynamic.conf
+        wg-quick up /tmp/wireguard/wg0.conf
         
         # Wait for reconnection
         sleep 10
