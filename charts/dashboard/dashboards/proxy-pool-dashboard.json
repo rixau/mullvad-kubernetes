@@ -222,48 +222,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Active Connections"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "short"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 10
-                    },
-                    {
-                      "color": "orange",
-                      "value": 20
-                    },
-                    {
-                      "color": "red",
-                      "value": 30
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "Avg Conn Duration (s)"
             },
             "properties": [
@@ -335,17 +293,10 @@
         },
         {
           "datasource": "Prometheus",
-          "expr": "proxy_active_connections",
-          "format": "table",
-          "instant": true,
-          "refId": "F"
-        },
-        {
-          "datasource": "Prometheus",
           "expr": "proxy_avg_connection_duration_seconds",
           "format": "table",
           "instant": true,
-          "refId": "G"
+          "refId": "F"
         }
       ],
       "title": "🖥️  Proxy Pool Performance Status",
@@ -375,8 +326,7 @@
               "Value #C": "Success Rate %",
               "Value #D": "Latency (ms)",
               "Value #E": "Speed (Mbps)",
-              "Value #F": "Active Connections",
-              "Value #G": "Avg Conn Duration (s)"
+              "Value #F": "Avg Conn Duration (s)"
             }
           }
         },
@@ -390,7 +340,6 @@
                 "Success Rate %",
                 "Latency (ms)",
                 "Speed (Mbps)",
-                "Active Connections",
                 "Avg Conn Duration (s)"
               ]
             }
@@ -688,7 +637,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Total Data Transferred",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -725,19 +674,19 @@
               },
               {
                 "color": "yellow",
-                "value": 100000
+                "value": 10000000
               },
               {
                 "color": "orange",
-                "value": 500000
+                "value": 50000000
               },
               {
                 "color": "red",
-                "value": 1000000
+                "value": 100000000
               }
             ]
           },
-          "unit": "Bps"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -750,7 +699,7 @@
       "id": 5,
       "options": {
         "legend": {
-          "calcs": ["last", "max", "mean"],
+          "calcs": ["last", "max", "total"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -763,93 +712,12 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "rate(proxy_bytes_transferred_total[5m])",
+          "expr": "increase(proxy_bytes_transferred_total[1m])",
           "legendFormat": "{{proxy_name}}",
           "refId": "A"
         }
       ],
-      "title": "💾 Data Transfer Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 35
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": ["last", "sum"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(proxy_requests_by_client_total[5m])",
-          "legendFormat": "{{location}} - {{client}}",
-          "refId": "A"
-        }
-      ],
-      "title": "📊 Requests by Client/Container",
+      "title": "💾 Data Transfer (per minute)",
       "type": "timeseries"
     }
   ],

@@ -6,10 +6,8 @@ metadata:
   labels:
     {{- include "mullvad-proxy-pool.labels" . | nindent 4 }}
     app.kubernetes.io/component: vpn-proxy-lb
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "{{ .Values.service.ports.metrics }}"
-    prometheus.io/path: "/metrics"
+  # Note: Prometheus annotations removed from service to avoid duplicate scraping
+  # Pods are scraped directly via pod annotations instead
 spec:
   type: {{ .Values.service.type }}
   ports:
