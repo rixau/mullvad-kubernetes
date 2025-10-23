@@ -1,3 +1,4 @@
 conf/*.conf
 .env
-.env.*changelog/
+.env.*
+changelog/
