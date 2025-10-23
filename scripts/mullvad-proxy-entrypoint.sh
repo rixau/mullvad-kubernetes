@@ -32,7 +32,7 @@ cleanup() {
     fi
     
     # Bring down WireGuard
-    wg-quick down wg0 2>/dev/null || true
+    wg-quick down /tmp/wg0-dynamic.conf 2>/dev/null || true
     
     # Restore original DNS configuration
     if [ -f /tmp/original-resolv.conf ]; then
@@ -106,19 +106,17 @@ echo "   WireGuard overhead: 80 bytes"
 echo "   Calculated WireGuard MTU: $WG_MTU"
 
 # Copy config to writable location and inject MTU
-# The mounted config might be read-only, so we work with a copy
+# The mounted config is read-only, so we work with a copy in /tmp
 echo "📝 Preparing WireGuard configuration with calculated MTU..."
-cp /etc/wireguard/wg0.conf /tmp/wg0.conf
+cp /etc/wireguard/wg0.conf /tmp/wg0-dynamic.conf
 
 # Remove any existing MTU lines
-sed -i "/^MTU/d" /tmp/wg0.conf
+sed -i "/^MTU/d" /tmp/wg0-dynamic.conf
 
 # Add MTU after [Interface] section
-sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /tmp/wg0.conf
+sed -i "/^\[Interface\]/a MTU = ${WG_MTU}" /tmp/wg0-dynamic.conf
 
-# Move the modified config back
-mv /tmp/wg0.conf /etc/wireguard/wg0.conf
-echo "✅ WireGuard MTU configured: $WG_MTU"
+echo "✅ WireGuard MTU configured: $WG_MTU (using /tmp/wg0-dynamic.conf)"
 
 # Get current network info before starting VPN
 DEFAULT_GW=$(ip route | grep default | awk '{print $3}')
@@ -152,8 +150,8 @@ echo "🔗 Starting Mullvad WireGuard connection..."
 # Disable resolvconf to avoid DNS issues
 export RESOLVCONF=no
 
-# Start WireGuard
-if wg-quick up wg0 2>&1 | tee /tmp/wg-output; then
+# Start WireGuard using the dynamic config
+if wg-quick up /tmp/wg0-dynamic.conf 2>&1 | tee /tmp/wg-output; then
     echo "✅ WireGuard started successfully"
 elif grep -q "resolvconf: command not found" /tmp/wg-output; then
     echo "⚠️  DNS setup warning (interface still up)"
@@ -380,9 +378,9 @@ while true; do
         echo "⚠️  VPN connection lost, attempting to reconnect..."
         
         # Restart WireGuard
-        wg-quick down wg0 || true
+        wg-quick down /tmp/wg0-dynamic.conf || true
         sleep 5
-        wg-quick up wg0
+        wg-quick up /tmp/wg0-dynamic.conf
         
         # Wait for reconnection
         sleep 10
