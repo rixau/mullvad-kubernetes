@@ -358,91 +358,40 @@ def monitor_dante_logs():
             time.sleep(60)
 
 def periodic_latency_check():
-    """Periodically check proxy latency by testing connection"""
-    print(f"🔍 Starting periodic latency checks (every 30s)...")
-    
+    """Periodically check pure network latency (ICMP)"""
     while True:
-        print(f"⏱️  Running latency check at {time.strftime('%H:%M:%S')}...")
         try:
-            # Test latency through SOCKS5 proxy
-            start_time = time.time()
-            
-            # Use curl with SOCKS5 proxy to test latency
-            result = subprocess.run(
-                ['curl', '-s', '-o', '/dev/null', '-w', '%{time_total}',
-                 '--socks5', f'127.0.0.1:{SOCKS5_PORT}',
-                 '--max-time', '10',
-                 'http://httpbin.org/get'],
-                capture_output=True,
-                text=True,
-                timeout=15
-            )
-            
-            if result.returncode == 0:
-                # curl returns time in seconds, convert to milliseconds
-                latency_seconds = float(result.stdout.strip())
-                latency_ms = latency_seconds * 1000
-                metrics.update_latency(latency_ms)
-                print(f"✅ Latency check: {latency_ms:.2f}ms")
-            else:
-                print(f"⚠️  Latency check failed")
-                metrics.update_latency(-1)  # Indicate failure
-                
+            start = time.time()
+            subprocess.run(["ping", "-c", "1", "-W", "2", "1.1.1.1"], 
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            latency_ms = (time.time() - start) * 1000
+            metrics.update_latency(latency_ms)
+            print(f"✅ Ping latency: {latency_ms:.2f}ms")
         except Exception as e:
             print(f"❌ Latency check error: {e}")
             metrics.update_latency(-1)
-        
-        # Wait 30 seconds before next check
         time.sleep(30)
 
 def periodic_speed_test():
     """Periodically test download speed through proxy"""
-    print(f"🚀 Starting periodic speed tests (every 5 minutes)...")
-    
-    # Wait 30 seconds before first test to let proxy stabilize
-    time.sleep(30)
-    
     while True:
         try:
-            # Download a small test file and measure speed
-            # Using httpbin's /bytes/1000000 endpoint (1MB)
-            start_time = time.time()
-            
             result = subprocess.run(
-                ['curl', '-s', '-o', '/dev/null', '-w', '%{size_download} %{time_total}',
+                ['curl', '-s', '-o', '/dev/null', '-w', '%{speed_download}',
                  '--socks5', f'127.0.0.1:{SOCKS5_PORT}',
-                 '--max-time', '30',
-                 'http://httpbin.org/bytes/1000000'],  # 1MB test
-                capture_output=True,
-                text=True,
-                timeout=35
-            )
-            
+                 '--max-time', '60',
+                 'http://speedtest.tele2.net/10MB.zip'],
+                capture_output=True, text=True, timeout=70)
             if result.returncode == 0:
-                output = result.stdout.strip().split()
-                if len(output) == 2:
-                    bytes_downloaded = float(output[0])
-                    time_taken = float(output[1])
-                    
-                    if time_taken > 0:
-                        # Calculate speed: bytes -> megabytes -> megabits -> Mbps
-                        megabytes = bytes_downloaded / (1024 * 1024)
-                        megabits = megabytes * 8
-                        mbps = megabits / time_taken
-                        
-                        metrics.update_speed(mbps)
-                        print(f"✅ Speed test: {mbps:.2f} Mbps ({megabytes:.2f}MB in {time_taken:.2f}s)")
-            else:
-                print(f"⚠️  Speed test failed")
-                metrics.update_speed(-1)
-                
+                # bytes per second -> megabits per second
+                speed_mbps = float(result.stdout.strip()) * 8 / 1_000_000
+                metrics.update_speed(speed_mbps)
+                print(f"✅ Download speed: {speed_mbps:.2f} Mbps")
         except Exception as e:
             print(f"❌ Speed test error: {e}")
             metrics.update_speed(-1)
+        time.sleep(600)
         
-        # Wait 5 minutes before next test
-        time.sleep(300)
-
 def main():
     # Start log monitoring in background
     monitor_thread = Thread(target=monitor_dante_logs, daemon=True)
